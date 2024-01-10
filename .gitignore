@@ -1,0 +1,21 @@
+# Ignore compiled Python files
+*.pyc
+
+# Ignore virtual environment directories
+venv/
+
+# Ignore data directories
+Amazon_HydroSHEDS_river_basin/
+Amazon_HydroSHEDS_river_networks/
+basins/shapefile_prepper_outputs/
+
+
+# Ignore log files
+*.log
+
+# Ignore IDE-specific files
+.vscode/
+.idea/
+
+# Ignore image files
+*.tif
