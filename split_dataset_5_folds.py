@@ -10,7 +10,7 @@ import json
 import glob
 import random
 import shutil
-
+import rioxarray
 import xarray as xr
 
 if __name__ == '__main__':
@@ -104,5 +104,18 @@ if __name__ == '__main__':
         else:
             move_file(dir_list, sub_dir)
 
+    # Check if five tiff files for each data point are using the same crs system
+    for folder in os.listdir(dest_folder):
+        # print(folder)
+        path = os.path.join(dest_folder, folder)
+        for fname in os.listdir(path):
+            sub_path = os.path.join(path, fname)
+            all_tiff = [file for file in os.listdir(sub_path) if file.endswith('.tif')]
+            # print(all_tiff)
+            all_crs = [rioxarray.open_rasterio(os.path.join(sub_path, file)).rio.crs for file in all_tiff]
+            if len(set(all_crs)) == 1:
+                continue
+            else:
+                print(f'The tiffs from folder {fname} needs to unify crs systems.')
 
 

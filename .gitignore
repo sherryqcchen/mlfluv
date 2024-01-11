@@ -7,7 +7,7 @@ venv/
 # Ignore data directories
 Amazon_HydroSHEDS_river_basin/
 Amazon_HydroSHEDS_river_networks/
-basins/shapefile_prepper_outputs/
+basins/
 
 
 # Ignore log files
@@ -19,3 +19,6 @@ basins/shapefile_prepper_outputs/
 
 # Ignore image files
 *.tif
+
+# Ignore output json files
+fold_split.json
