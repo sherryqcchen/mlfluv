@@ -5,6 +5,7 @@ import requests
 import io
 import ee
 import cv2
+import geemap
 import numpy as np
 import numpy.lib.recfunctions as rf
 import matplotlib.pyplot as plt
@@ -125,9 +126,6 @@ if __name__ == "__main__":
     s2_image = ee.Image(dws2_image.get('s2_img')).select('B.*')
     # print('S2 image of clear date:', s2_image.getInfo())
 
-    clear_range_end_date = clear_s2_date.advance(1, 'week')
-    print(clear_range_end_date.format('Y-MM-dd').getInfo())
-
     # add a property to sentinel-1 collection to find the closest date to the clear data
     def ee_get_date_diff(image):
 
@@ -135,12 +133,50 @@ if __name__ == "__main__":
                          ee.Number(image.get('system:time_start')).subtract(clear_s2_date.millis()).abs())
     
     s1_col = s1_col.map(ee_get_date_diff).sort('date_diff')
-    
+
     # The first image in the sorted collection is the image of the closest date
-    s1_image = s1_col.first()
+    # we use mosaic here because sometime it only has half a tile, in this case we mosaic the two tiles with closest date
+    s1_image = s1_col.mosaic().select('VV', 'VH') 
     clear_s1_date = ee.Date(s1_col.first().get('system:time_start'))
     
     print(f"The chosen s1 image date: {clear_s1_date.format('Y-MM-dd').getInfo()}")
+    
+    # TODO: preprocess s1 image using https://github.com/adugnag/gee_s1_ard/blob/main/python-api/s1_ard.py
+
+    # Find other land cover maps from ESRI 10m annual LULC 
+    esri_label= ee.ImageCollection("projects/sat-io/open-datasets/landcover/ESRI_Global-LULC_10m_TS").filter(col_filter).mosaic().clip(aoi)
+    esawc_label = ee.ImageCollection('ESA/WorldCover/v100').mosaic().clip(aoi)
+    glc10_label = ee.ImageCollection("projects/sat-io/open-datasets/FROM-GLC10").mosaic().clip(aoi)
+
+    # print(esri_label.getInfo())
+
+    # Get accumulative rainfall from CHIRPS dataset
+    rainfall = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY')\
+                    .select('precipitation')\
+                    .filter(ee.Filter.Or(
+                            ee.Filter.date(clear_s1_date, clear_s2_date),
+                            ee.Filter.date(clear_s2_date, clear_s1_date)))\
+                    .filterBounds(aoi)
+    
+    # Accumulative rainfall between clear_s1_date and clear_s2_date, 
+    accumulative_rainfall_total = rainfall.reduce(ee.Reducer.sum())\
+                                    .reduceRegion(reducer= ee.Reducer.mean(), geometry=aoi, scale=5000)
+    
+    rainfall_sum = accumulative_rainfall_total.get('precipitation_sum') # the unit is mm
+    print(f"The average accumulative rainfall within aoi is {rainfall_sum.getInfo()} mm.")
+
+    # Get S2 cloud probability for the s2 image
+    s2_cloud_prob= ee.ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")\
+                    .filter(col_filter)\
+                    .filterDate(clear_s2_date.getRange('day'))\
+                    .first()\
+                    .select('probability')\
+                    .reduceRegion(reducer=ee.Reducer.mean(), geometry=aoi, scale=5000)\
+                    .get('probability')
+    print(f"The cloud probability is:{s2_cloud_prob.getInfo()}")
+                    
+
+
 
     
 
