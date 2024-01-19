@@ -92,11 +92,13 @@ if __name__ == "__main__":
 
     col_filter = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(start_date, end_date))
 
-    # Filter image collection from Google Dynamic World dataset
+    # Filter image collection from Google Dynamic World dataset, sentinel-1, sentinel-2
     dw_col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(col_filter)
+    s1_col = ee.ImageCollection('COPERNICUS/S1_GRD').filter(col_filter)
     s2_col = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED').filter(col_filter)
     print(dw_col.size().getInfo())
 
+    # DW is made on top of Sentinel-2, so they have the same system_index property and these two collections can be joined together 
     dws2_col = ee.Join.saveFirst('s2_img').apply(dw_col, s2_col, ee.Filter.equals(leftField='system:index', rightField='system:index'))
 
     # Define a function to count masked pixels in each DW label
@@ -115,19 +117,32 @@ if __name__ == "__main__":
     print(f"I find the first date of DW lable with max valid pixel percentage: {ee.Date(max_time_start).format('Y-MM-dd').getInfo()}")
     
     # Get this first clear date
-    clear_date = ee.Date(max_time_start)
+    clear_s2_date = ee.Date(max_time_start)
 
     # Get DW label of this date
-    dws2_image = ee.Image(dws2_col.filterDate(clear_date, clear_date.advance(1, 'day')).first())
+    dws2_image = ee.Image(dws2_col.filterDate(clear_s2_date, clear_s2_date.advance(1, 'day')).first())
 
     s2_image = ee.Image(dws2_image.get('s2_img')).select('B.*')
-    # print('Sentinel-2 image of clear date:', s2_image.getInfo())
+    # print('S2 image of clear date:', s2_image.getInfo())
 
-    clear_range_end_date = clear_date.advance(2, 'week')
-
+    clear_range_end_date = clear_s2_date.advance(1, 'week')
     print(clear_range_end_date.format('Y-MM-dd').getInfo())
 
+    # add a property to sentinel-1 collection to find the closest date to the clear data
+    def ee_get_date_diff(image):
 
+        return image.set('date_diff', 
+                         ee.Number(image.get('system:time_start')).subtract(clear_s2_date.millis()).abs())
+    
+    s1_col = s1_col.map(ee_get_date_diff).sort('date_diff')
+    
+    # The first image in the sorted collection is the image of the closest date
+    s1_image = s1_col.first()
+    clear_s1_date = ee.Date(s1_col.first().get('system:time_start'))
+    
+    print(f"The chosen s1 image date: {clear_s1_date.format('Y-MM-dd').getInfo()}")
+
+    
 
 
     
