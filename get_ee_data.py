@@ -67,6 +67,47 @@ def ee_count_masked_dw_percent(image):
 
     return image.set('masked_percentage', masked_percent).set('date', image.date().format('YYYY-MM-dd'))
 
+def remap_lulc(image, lulc_type='esa_world_cover'):
+    """
+    Remap the class values of three land use and land cover (LULC) products to MLFluv classes
+    In the MLFluv, water: 0, tree:1, shallow-rooted vegetation: 2, crops:3, build-up:4, 
+    fluvial sediment:5, bareland: 6, ice/snow:7, clouds are set to -999. 
+
+    Args:
+        image (ee.Image): land cover map, with one band in the image saving class values in a list of integers.
+        lulc_type (str, optional): key to indicate which LULC map is used. Defaults to 'esa_world_cover'. Choose from 'esa_world_cover', 'dynamic_world', 'from_glc10', 'esri_land_cover'
+
+    Returns:
+        image_remap (ee.Image): remapped land cover map.
+    """        
+    
+    if lulc_type == 'esa_world_cover':
+        from_list = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100]
+        to_list =   [1,  2,  2,  3,  4,  6,  7,  0,  2,  2,  7]
+        band_name = 'Map'
+
+    elif lulc_type == 'dynamic_world':
+        from_list = [0, 1, 2, 3, 5, 4, 6, 7, 8]
+        to_list =   [0, 1, 2, 2, 2, 3, 4, 6, 7]
+        band_name = 'label'
+    
+    elif lulc_type == 'from_glc10':
+        from_list = [10, 20, 30, 40, 60, 80, 90, 100]
+        to_list =   [ 3,  1,  2,  2,  0,  4,  6,  7]
+        band_name = 'b1'
+    
+    elif lulc_type == 'esri_land_cover':
+        from_list = [1, 2, 4, 5, 7, 8, 9, 11]
+        to_list =   [0, 1, 2, 3, 4, 6, 7, 2]
+        band_name = 'b1'
+
+    else:
+        print('Unrecognised LULC map is given.')
+
+    image_remap = image.remap(from_list, to_list, defaultValue=-999, bandName=band_name)
+
+    return image_remap
+
 
 if __name__ == "__main__":
 
@@ -143,12 +184,17 @@ if __name__ == "__main__":
     
     # TODO: preprocess s1 image using https://github.com/adugnag/gee_s1_ard/blob/main/python-api/s1_ard.py
 
-    # Find other land cover maps from ESRI 10m annual LULC 
-    esri_label= ee.ImageCollection("projects/sat-io/open-datasets/landcover/ESRI_Global-LULC_10m_TS").filter(col_filter).mosaic().clip(aoi)
-    esawc_label = ee.ImageCollection('ESA/WorldCover/v100').mosaic().clip(aoi)
-    glc10_label = ee.ImageCollection("projects/sat-io/open-datasets/FROM-GLC10").mosaic().clip(aoi)
-
-    # print(esri_label.getInfo())
+    # Merge classes in different LULC products
+    esri_label = ee.ImageCollection("projects/sat-io/open-datasets/landcover/ESRI_Global-LULC_10m_TS").filter(col_filter).mosaic()
+    esri_remap = remap_lulc(esri_label, 'esri_land_cover')
+    
+    esawc_label = ee.Image('ESA/WorldCover/v100/2020')
+    esawc_remap = remap_lulc(esawc_label, 'esa_world_cover')   
+    
+    glc10_label = ee.ImageCollection("projects/sat-io/open-datasets/FROM-GLC10").mosaic()
+    glc10_remap = remap_lulc(glc10_label, 'from_glc10')
+    
+    dws2_remap = remap_lulc(dws2_image, 'dynamic_world')  
 
     # Get accumulative rainfall from CHIRPS dataset
     rainfall = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY')\
@@ -175,14 +221,3 @@ if __name__ == "__main__":
                     .get('probability')
     print(f"The cloud probability is:{s2_cloud_prob.getInfo()}")
                     
-
-
-
-    
-
-
-    
-
-
-
-
