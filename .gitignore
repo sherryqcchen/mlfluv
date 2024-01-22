@@ -9,6 +9,8 @@ Amazon_HydroSHEDS_river_basin/
 Amazon_HydroSHEDS_river_networks/
 basins/
 
+# Ignore the cloned repository
+gee_s1_ard/
 
 # Ignore log files
 *.log
@@ -22,3 +24,6 @@ basins/
 
 # Ignore output json files
 fold_split.json
+
+# Ignore GEE-API key file 
+sen12flood-qiuyangchen-8fdb42008616.json

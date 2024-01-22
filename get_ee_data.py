@@ -11,6 +11,7 @@ import numpy.lib.recfunctions as rf
 import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy.interpolate import NearestNDInterpolator
+import gee_s1_ard.python_api.wrapper as wp
 
 S1_BANDS = ['VV', 'VH']
 S2_BANDS = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
@@ -38,7 +39,7 @@ def ee_buffer_point(coordinates):
         aoi (ee.Geometry): the buffered rectangle geometry
     """
     point = ee.Geometry.Point(coords)
-    aoi = point.buffer(distance=1024, maxError=4).bounds()
+    aoi = point.buffer(distance=2048, maxError=4).bounds()
     # print(aoi.getInfo())
     # buffered_area = aoi.area(maxError=1).getInfo()
     # print(buffered_area)
@@ -108,6 +109,57 @@ def remap_lulc(image, lulc_type='esa_world_cover'):
 
     return image_remap
 
+def convert_ee_image_to_np_arr(s1_img, s2_img):
+    """
+    Resample and then convert Sentinel-1 and Sentinel-2 images from ee.Image object to .npy file
+    Args:
+        s1_img: Sentinel-1 image, data type ee.Image
+        s2_img: Sentinel-2 image, data type ee.Image
+
+    Returns:
+        s1_arr: converted Sentinel-1 image, data type ndarray, shape (512, 512, 2)
+        s2_arr: converted Sentinel-2 image, data type ndarray, shape (512, 512, 13)
+    """
+
+    s1_resample = s1_img.select(S1_BANDS).reproject(crs='EPSG:4326', scale=10)
+    s1_url = s1_resample.toFloat().getDownloadURL({'name': 's1_image',
+                                                   'bands': S1_BANDS,
+                                                   'region': aoi,
+                                                   'scale': 10,
+                                                   'format': 'NPY'})
+    response_s1 = requests.get(s1_url)
+    data_s1 = np.load(io.BytesIO(response_s1.content))
+    # reshape data: unpack numpy array of tuples into ndarray
+    # Method from: https://stackoverflow.com/questions/55852450/how-do-i-unpack-a-numpy-array-of-tuples-into-an-ndarray
+    s1_arr = rf.structured_to_unstructured(data_s1)
+
+    s2_resample = s2_img.select(S2_BANDS).reproject(crs='EPSG:4326', scale=10)
+    s2_url = s2_resample.toInt16().getDownloadURL({'name': 's2_image',
+                                                   'bands': S2_BANDS,
+                                                   'region': aoi,
+                                                   'scale': 10,
+                                                   'format': 'NPY'
+                                                   })
+    response_s2 = requests.get(s2_url)
+    data_s2 = np.load(io.BytesIO(response_s2.content))
+    s2_arr = rf.structured_to_unstructured(data_s2)
+
+    return s1_arr, s2_arr
+
+def interpolator(data):
+    """
+    Interpolate missing data for the connecting areas between tiles
+    Usually Sentinel-1 images would have -inf values in the data array after running resampling in the function convert_ee_image_to_np_arr()
+    Args:
+        data: data array
+    Returns:
+        data array
+    """
+    if np.all(np.isfinite(data)) is False:
+        mask = np.where(np.isfinite(data))
+        interp = NearestNDInterpolator(np.transpose(mask), data[mask])
+        data = interp(*np.indices(data.shape))
+    return data
 
 if __name__ == "__main__":
 
@@ -137,7 +189,7 @@ if __name__ == "__main__":
     # Filter image collection from Google Dynamic World dataset, sentinel-1, sentinel-2
     dw_col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(col_filter)
     s1_col = ee.ImageCollection('COPERNICUS/S1_GRD').filter(col_filter)
-    s2_col = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED').filter(col_filter)
+    s2_col = ee.ImageCollection('COPERNICUS/S2').filter(col_filter)
     print(dw_col.size().getInfo())
 
     # DW is made on top of Sentinel-2, so they have the same system_index property and these two collections can be joined together 
@@ -177,13 +229,48 @@ if __name__ == "__main__":
 
     # The first image in the sorted collection is the image of the closest date
     # we use mosaic here because sometime it only has half a tile, in this case we mosaic the two tiles with closest date
-    s1_image = s1_col.mosaic().select('VV', 'VH') 
+    # s1_image = s1_col.mosaic().select('VV', 'VH') 
     clear_s1_date = ee.Date(s1_col.first().get('system:time_start'))
     
     print(f"The chosen s1 image date: {clear_s1_date.format('Y-MM-dd').getInfo()}")
     
-    # TODO: preprocess s1 image using https://github.com/adugnag/gee_s1_ard/blob/main/python-api/s1_ard.py
+    # preprocess s1 image using https://github.com/adugnag/gee_s1_ard/blob/main/python-api/s1_ard.py
+    # Parameters
+    dem_cop = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM').filterBounds(aoi).mosaic()
+    parameter = {'START_DATE': clear_s1_date,
+                'STOP_DATE': clear_s1_date.advance(1, 'day'),        
+                'POLARIZATION': 'VVVH',
+                'ORBIT' : 'DESCENDING',
+                'ORBIT_NUM': None,
+                'ROI': aoi,
+                'APPLY_BORDER_NOISE_CORRECTION': False,
+                'APPLY_SPECKLE_FILTERING': True,
+                'SPECKLE_FILTER_FRAMEWORK':'MULTI',
+                'SPECKLE_FILTER': 'GAMMA MAP',
+                'SPECKLE_FILTER_KERNEL_SIZE': 9,
+                'SPECKLE_FILTER_NR_OF_IMAGES':10,
+                'APPLY_TERRAIN_FLATTENING': True,
+                'DEM': dem_cop,
+                'TERRAIN_FLATTENING_MODEL': 'VOLUME',
+                'TERRAIN_FLATTENING_ADDITIONAL_LAYOVER_SHADOW_BUFFER':0,
+                'FORMAT': 'DB',
+                'CLIP_TO_ROI': True,
+                'SAVE_ASSET': False,
+                'ASSET_ID': "users/qiuyangschen"
+                }
+    # pre-process s1 collection
+    s1_processed = wp.s1_preproc(parameter)
+    s1_image = s1_processed.mosaic().select('VV', 'VH')
 
+    # Convert s1_image, s2_image to numpy arrays
+    if all_exist(S1_BANDS, s1_image.bandNames().getInfo()) and all_exist(S2_BANDS, s2_image.bandNames().getInfo()):
+        s1_data, s2_data = convert_ee_image_to_np_arr(s1_image, s2_image)
+    else:
+        print(f"Sentinel-1 bands are not complete, drop data from this point.")
+
+    # Interpolate missing data in s1, s2 images
+    
+    
     # Merge classes in different LULC products
     esri_label = ee.ImageCollection("projects/sat-io/open-datasets/landcover/ESRI_Global-LULC_10m_TS").filter(col_filter).mosaic()
     esri_remap = remap_lulc(esri_label, 'esri_land_cover')
@@ -220,4 +307,7 @@ if __name__ == "__main__":
                     .reduceRegion(reducer=ee.Reducer.mean(), geometry=aoi, scale=5000)\
                     .get('probability')
     print(f"The cloud probability is:{s2_cloud_prob.getInfo()}")
+
+    
                     
+    
