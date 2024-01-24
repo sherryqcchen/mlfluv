@@ -8,6 +8,7 @@ venv/
 Amazon_HydroSHEDS_river_basin/
 Amazon_HydroSHEDS_river_networks/
 basins/
+data/figures
 
 # Ignore the cloned repository
 gee_s1_ard/
@@ -21,6 +22,9 @@ gee_s1_ard/
 
 # Ignore image files
 *.tif
+*.npy
+*.png
+*.jpeg
 
 # Ignore output json files
 fold_split.json

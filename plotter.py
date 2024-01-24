@@ -1,10 +1,11 @@
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import normalize
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import cv2
 
-
+# plt.style.use('QC_publication')
+# sns.axes_style("darkgrid")
 
 def plot_lulc(data, title='LULC Class Map'):
     """
@@ -85,6 +86,60 @@ def plot_s1(s1_array, vis_option='VV'):
         plt.imshow(rgb_arr)
     plt.show()
 
+def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_array, savefig=False, fig_name=None):
+    
+    s2 = cv2.normalize(s2_array[:, :, [3,2,1]],
+                        dst=None,
+                        alpha=0,
+                        beta=255,
+                        norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+    s1 = s1_array[:,:,0]
+    
+    lulc_cmap = mpl.colors.ListedColormap(['#4183C4', '#009600', '#CCFF99', '#F096FF', '#FA0000', '#FFBB22', '#B4B4B4', '#6BF5FF'])
+
+    # plt.imshow(data, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+
+    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(15, 15))
+
+    for i, ax in enumerate(axes.flat):
+        if i == 0:
+            im = ax.imshow(s1)
+            ax.set_title('Sentinel-1 VV polarization', fontsize=20)
+        elif i == 1:
+            im = ax.imshow(s2)
+            ax.set_title('Sentinel-2 RGB stack', fontsize=20)
+        elif i == 2:
+            im = ax.imshow(esri_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            ax.set_title('ESRI label', fontsize=20)
+        elif i == 3:
+            im = ax.imshow(esawc_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            ax.set_title('ESA World Cover label', fontsize=20)
+        elif i == 4:
+            im = ax.imshow(dw_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            ax.set_title('Dynamic World label', fontsize=20)
+        elif i == 5:
+            im = ax.imshow(glc10_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            ax.set_title('FROM-GLC10 label', fontsize=20)
+
+    # Add color bar for reference
+    # divider = make_axes_locatable(axes[1,1])
+    # cax = divider.append_axes("right", size="5%", pad=0.05)
+    fig.subplots_adjust(right=0.8)
+    cbar_ax = fig.add_axes([0.85, 0.15, 0.02, 0.5])
+    cbar = fig.colorbar(im, cax=cbar_ax, ticks=np.arange(0, 8))
+    class_names = ['water', 'tree', 'shallow vege', 'crops', 'build', 'fluvial sediment', 'bare', 'ice/snow']
+    cbar.ax.set_title('Class', fontsize=20)
+    cbar.set_ticklabels(class_names)
+    cbar.ax.tick_params(labelsize=16)
+
+    plt.tight_layout(rect=[0, 0, 0.9, 0.95])
+    if savefig==True:
+        plt.savefig(f'data_figures/{fig_name}.png')
+
+    fig.show()
+
+
+
 if __name__=='__main__':
 
     data = np.load('20200108T150719_20200108T150715_T18MZU_590S7209W_ESAWC.npy')
@@ -92,6 +147,6 @@ if __name__=='__main__':
     s1_data = np.load('20200108T150719_20200108T150715_T18MZU_590S7209W_S1.npy')
     plot_lulc(data, 'ESAWC')
     plot_s2_rgb(s2_data)
-    plot_s1(s1_data, 'vv')
-    plot_s1(s1_data, 'vh')
+    plot_s1(s1_data, 'VV')
+    plot_s1(s1_data, 'VH')
     plot_s1(s1_data, 'ratio')
