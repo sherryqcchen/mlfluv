@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy.interpolate import NearestNDInterpolator
 import gee_s1_ard.python_api.wrapper as wp
+import plotter
 
 S1_BANDS = ['VV', 'VH']
 S2_BANDS = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
@@ -183,7 +184,7 @@ def interpolator(data):
 
 
 
-def download_1_point_data(coords, year=2020):
+def download_1_point_data(coords, year=2020, VIS_OPTION=False):
     """
     Filter Sentinel-1/2 images and 4 LULC labels for a given point in a given year.
     Download all the images as ".npy" files and saved under the directory of point_id
@@ -259,7 +260,7 @@ def download_1_point_data(coords, year=2020):
         # preprocess s1 image using https://github.com/adugnag/gee_s1_ard/blob/main/python-api/s1_ard.py
         # Parameters
     dem_cop = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM').filterBounds(aoi).mosaic()
-    parameter = {'START_DATE': clear_s1_date,
+    parameter = {'START_DATE': clear_s1_date.advance(-1, 'day'),
                     'STOP_DATE': clear_s1_date.advance(1, 'day'),        
                     'POLARIZATION': 'VVVH',
                     'ORBIT' : None,
@@ -282,117 +283,114 @@ def download_1_point_data(coords, year=2020):
                     }
         # pre-process s1 collection
     s1_processed = wp.s1_preproc(parameter)
-    s1_id = s1_processed.first().get('system:index')
-    s1_image = s1_processed.mosaic().set('system:index', s1_id)#.select('VV', 'VH')
+    if s1_processed.size().getInfo() != 0:
+        s1_id = s1_processed.first().get('system:index')
+        s1_image = s1_processed.mosaic().set('system:index', s1_id)#.select('VV', 'VH')
 
-    # Convert s1_image, s2_image to numpy arrays
-    if all_exist(S1_BANDS, s1_image.bandNames().getInfo()) and all_exist(S2_BANDS, s2_image.bandNames().getInfo()):
-        s1_data = convert_ee_image_to_np_arr(s1_image, S1_BANDS, aoi)
-        s2_data = convert_ee_image_to_np_arr(s2_image, S2_BANDS, aoi)
+        # Convert s1_image, s2_image to numpy arrays
+        if all_exist(S1_BANDS, s1_image.bandNames().getInfo()) and all_exist(S2_BANDS, s2_image.bandNames().getInfo()):
+            s1_data = convert_ee_image_to_np_arr(s1_image, S1_BANDS, aoi)
+            s2_data = convert_ee_image_to_np_arr(s2_image, S2_BANDS, aoi)
 
-        # Interpolate missing data in s1, s2 images
-        s1_filled_data = interpolator(s1_data)
-        s2_filled_data = interpolator(s2_data)
+            # Interpolate missing data in s1, s2 images
+            if VIS_OPTION:
+                s1_filled_data = interpolator(s1_data)
+                s2_filled_data = interpolator(s2_data)
 
             # Visualize s1, s2 images: plot only works in vscode interactive window 
-        plt.imshow(s1_filled_data[:, :, 0])
-        plt.show()
+            plotter.plot_s1(s1_filled_data, 'vv')
+            plotter.plot_s2_rgb(s2_filled_data)
+                
+            # Merge classes in different LULC products
+            esri_label = ee.ImageCollection("projects/sat-io/open-datasets/landcover/ESRI_Global-LULC_10m_TS").filter(col_filter).mosaic()
+            esri_remap = remap_lulc(esri_label, 'esri_land_cover')
+                
+            esawc_label = ee.Image('ESA/WorldCover/v100/2020')
+            esawc_remap = remap_lulc(esawc_label, 'esa_world_cover')   
+                
+            glc10_label = ee.ImageCollection("projects/sat-io/open-datasets/FROM-GLC10").mosaic()
+            glc10_remap = remap_lulc(glc10_label, 'from_glc10')
+                
+            dw_remap = remap_lulc(dws2_image, 'dynamic_world')  
 
-        rgb_img = s2_filled_data[:, :, [3,2,1]]
-        rgb_arr = cv2.normalize(rgb_img,
-                            dst=None,
-                            alpha=0,
-                            beta=255,
-                            norm_type=cv2.NORM_MINMAX).astype(np.uint8)
-        plt.imshow(rgb_arr)
-        plt.show()
-            
-        # Merge classes in different LULC products
-        esri_label = ee.ImageCollection("projects/sat-io/open-datasets/landcover/ESRI_Global-LULC_10m_TS").filter(col_filter).mosaic()
-        esri_remap = remap_lulc(esri_label, 'esri_land_cover')
-            
-        esawc_label = ee.Image('ESA/WorldCover/v100/2020')
-        esawc_remap = remap_lulc(esawc_label, 'esa_world_cover')   
-            
-        glc10_label = ee.ImageCollection("projects/sat-io/open-datasets/FROM-GLC10").mosaic()
-        glc10_remap = remap_lulc(glc10_label, 'from_glc10')
-            
-        dw_remap = remap_lulc(dws2_image, 'dynamic_world')  
+                # Read these remapped tiles into numpy array, there remapped bands are all called "remapped".
+            esri_arr = convert_ee_image_to_np_arr(esri_remap, 'remapped', aoi)
+            esawc_arr = convert_ee_image_to_np_arr(esawc_remap, 'remapped', aoi)
+            glc10_arr = convert_ee_image_to_np_arr(glc10_remap, 'remapped', aoi)
+            dw_arr = convert_ee_image_to_np_arr(dw_remap, 'remapped', aoi)
 
-            # Read these remapped tiles into numpy array, there remapped bands are all called "remapped".
-        esri_arr = convert_ee_image_to_np_arr(esri_remap, 'remapped', aoi)
-        esawc_arr = convert_ee_image_to_np_arr(esawc_remap, 'remapped', aoi)
-        glc10_arr = convert_ee_image_to_np_arr(glc10_remap, 'remapped', aoi)
-        dw_arr = convert_ee_image_to_np_arr(dw_remap, 'remapped', aoi)
+                # Get accumulative rainfall from CHIRPS dataset
+            rainfall = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY')\
+                                .select('precipitation')\
+                                .filter(ee.Filter.Or(
+                                        ee.Filter.date(clear_s1_date, clear_s2_date),
+                                        ee.Filter.date(clear_s2_date, clear_s1_date)))\
+                                .filterBounds(aoi)
+                
+                # Accumulative rainfall between clear_s1_date and clear_s2_date, 
+            accumulative_rainfall_total = rainfall.reduce(ee.Reducer.sum())\
+                                                .reduceRegion(reducer= ee.Reducer.mean(), geometry=aoi, scale=5000)
+                
+            if accumulative_rainfall_total.size().getInfo() == 0:
+                rainfall_sum = ee.Number(-999)
+                print('This point has no available rainfall data.')
+            else:
+                rainfall_sum = accumulative_rainfall_total.get('precipitation_sum') # the unit is mm
+                print(f"The average accumulative rainfall within aoi is {rainfall_sum.getInfo()} mm.")
 
-            # Get accumulative rainfall from CHIRPS dataset
-        rainfall = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY')\
-                            .select('precipitation')\
-                            .filter(ee.Filter.Or(
-                                    ee.Filter.date(clear_s1_date, clear_s2_date),
-                                    ee.Filter.date(clear_s2_date, clear_s1_date)))\
-                            .filterBounds(aoi)
-            
-            # Accumulative rainfall between clear_s1_date and clear_s2_date, 
-        accumulative_rainfall_total = rainfall.reduce(ee.Reducer.sum())\
-                                            .reduceRegion(reducer= ee.Reducer.mean(), geometry=aoi, scale=5000)
-            
-        if accumulative_rainfall_total.size().getInfo() == 0:
-            rainfall_sum = ee.Number(-999)
-            print('This point has no available rainfall data.')
+            # Get S2 cloud probability for the s2 image
+            s2_cloud_prob= ee.ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")\
+                                .filter(col_filter)\
+                                .filterDate(clear_s2_date.getRange('day'))\
+                                .first()\
+                                .select('probability')\
+                                .reduceRegion(reducer=ee.Reducer.mean(), geometry=aoi, scale=5000)\
+                                .get('probability')
+            print(f"The cloud probability is:{s2_cloud_prob.getInfo()}")
+
+                # Exporting data, we use the system index of Sentinel-2 and DW data (they share the same index) as part of the point_id
+                # In some cases if the sampling points are close to each other and occured on the same Sentinel-2 tile
+                # We also use lng, lat info in the point_id 
+            point_id = s2_id + "_" + coord_string
+
+            data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
+            point_path = os.path.join(data_path, point_id) 
+
+            if not os.path.exists(point_path):
+                os.makedirs(point_path)
+                
+            meta_fname = os.path.join(point_path, point_id + "_meta.csv")
+                
+                # Save all the meta info in a dictionary
+            meta_dict = {}
+            meta_dict['point'] = coords
+            meta_dict['year'] = year
+            meta_dict['aoi'] = aoi.coordinates().getInfo()
+            meta_dict['s1_id'] = s1_image.get('system:index').getInfo()
+            meta_dict['s2_id'] = s2_image.get('system:index').getInfo()
+            meta_dict['s1_date'] = clear_s1_date.format('Y-MM-dd').getInfo()
+            meta_dict['s2_date'] = clear_s2_date.format('Y-MM-dd').getInfo()
+            meta_dict['DW_cover_percentage'] = max_percent.getInfo()
+            meta_dict['acc_rainfall'] = rainfall_sum.getInfo()
+            meta_dict['cloud_prob'] = s2_cloud_prob.getInfo()
+
+            with open(meta_fname, 'w') as f:
+                w = csv.DictWriter(f, meta_dict.keys())
+                w.writeheader()
+                w.writerow(meta_dict)
+
+            np.save(os.path.join(point_path, point_id+'_S1.npy'), s1_filled_data)
+            np.save(os.path.join(point_path, point_id+'_S2.npy'), s2_filled_data)
+            np.save(os.path.join(point_path, point_id+'_ESRI.npy'), esri_arr)
+            np.save(os.path.join(point_path, point_id+'_ESAWC.npy'), esawc_arr)
+            np.save(os.path.join(point_path, point_id+'_DW.npy'), dw_arr)
+            np.save(os.path.join(point_path, point_id+'_GLC10.npy'), glc10_arr)
+
         else:
-            rainfall_sum = accumulative_rainfall_total.get('precipitation_sum') # the unit is mm
-            print(f"The average accumulative rainfall within aoi is {rainfall_sum.getInfo()} mm.")
-
-        # Get S2 cloud probability for the s2 image
-        s2_cloud_prob= ee.ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")\
-                            .filter(col_filter)\
-                            .filterDate(clear_s2_date.getRange('day'))\
-                            .first()\
-                            .select('probability')\
-                            .reduceRegion(reducer=ee.Reducer.mean(), geometry=aoi, scale=5000)\
-                            .get('probability')
-        print(f"The cloud probability is:{s2_cloud_prob.getInfo()}")
-
-            # Exporting data, we use the system index of Sentinel-2 and DW data (they share the same index) as part of the point_id
-            # In some cases if the sampling points are close to each other and occured on the same Sentinel-2 tile
-            # We also use lng, lat info in the point_id 
-        point_id = s2_id + "_" + coord_string
-
-        data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
-        point_path = os.path.join(data_path, point_id) 
-
-        if not os.path.exists(point_path):
-            os.makedirs(point_path)
-            
-        meta_fname = os.path.join(point_path, point_id + "_meta.csv")
-            
-            # Save all the meta info in a dictionary
-        meta_dict = {}
-        meta_dict['point'] = coords
-        meta_dict['year'] = year
-        meta_dict['aoi'] = aoi.coordinates().getInfo()
-        meta_dict['s1_id'] = s1_image.get('system:index').getInfo()
-        meta_dict['s2_id'] = s2_image.get('system:index').getInfo()
-        meta_dict['s1_date'] = clear_s1_date.format('Y-MM-dd').getInfo()
-        meta_dict['s2_date'] = clear_s2_date.format('Y-MM-dd').getInfo()
-        meta_dict['DW_cover_percentage'] = max_percent.getInfo()
-        meta_dict['acc_rainfall'] = rainfall_sum.getInfo()
-        meta_dict['cloud_prob'] = s2_cloud_prob.getInfo()
-
-        with open(meta_fname, 'w') as f:
-            w = csv.DictWriter(f, meta_dict.keys())
-            w.writeheader()
-            w.writerow(meta_dict)
-
-        np.save(os.path.join(point_path, point_id+'_S1.npy'), s1_filled_data)
-        np.save(os.path.join(point_path, point_id+'_S2.npy'), s2_filled_data)
-        np.save(os.path.join(point_path, point_id+'_ESRI.npy'), esri_arr)
-        np.save(os.path.join(point_path, point_id+'_ESAWC.npy'), esawc_arr)
-        np.save(os.path.join(point_path, point_id+'_DW.npy'), dw_arr)
-        np.save(os.path.join(point_path, point_id+'_GLC10.npy'), glc10_arr)
-
+            print('S1 or S2 has missing bands, skip this point.')
+            pass
     else:
+        print('Sentinel-1 data missing, skip this point.')
         pass
 
 
@@ -425,6 +423,6 @@ if __name__ == "__main__":
             point_list.append(coord)
 
     # print(point_list)
-    for idx, point in enumerate(point_list):
-        print(f"{idx}: {point}")
+    for idx, point in enumerate(point_list[24:]):
+        print(f"{idx+24}: {point}")
         download_1_point_data(point)
