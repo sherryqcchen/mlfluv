@@ -87,7 +87,20 @@ def plot_s1(s1_array, vis_option='VV'):
     plt.show()
 
 def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_array, meta_info, savefig=False, fig_name=None):
-    
+    """
+    Plot Sentinel-1&2 images and 4 types of land cover products, expot to png.
+
+    Args:
+        s1_array (numpy.ndarray): sentinel-1 data array
+        s2_array (numpy.ndarray): sentinel-2 data array
+        esri_array (numpy.2darray):ESRI land cover data array
+        esawc_array (numpy.2darray): ESA World Cover land cover data array
+        dw_array (numpy.2darray): Dynamic World land cover data array
+        glc10_array (numpy.2darray): FROM-GLC10 land cover data array.
+        meta_info (pandas.dataframe object): a dataframe stores meta info point coordinates, river order, 
+        savefig (bool, optional): Whether save the plot. Defaults to False.
+        fig_name (str, optional): svaed figure name. Defaults to None.
+    """    
     s2 = cv2.normalize(s2_array[:, :, [3,2,1]],
                         dst=None,
                         alpha=0,
@@ -138,14 +151,15 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
     river_order = meta_info['riv_order'][0]
     da = meta_info['drainage_area'][0]
 
-    meta_str = f"Images for {point_coords} in {year}.\n River order: {river_order}, upland drainage area (in pixels): {da}."
+    meta_str = f"Images for {point_coords} in {year}.\n River order: {river_order}, upland drainage area: {da} km \u00B2."
 
     fig.text(0.15, 0.95, meta_str, fontsize=20)
 
     if savefig==True:
         plt.savefig(f'data_figures/{fig_name}.png')
-
-    # fig.show()
+    
+    plt.cla()
+    plt.close(fig)
 
 
 
