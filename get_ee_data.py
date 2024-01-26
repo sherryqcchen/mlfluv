@@ -160,6 +160,7 @@ def convert_ee_image_to_np_arr(img, band_names, geometry):
     """
 
     img_resample = img.select(band_names).reproject(crs='EPSG:4326', scale=10)
+    img_projection = img_resample.select(0).projection()
     img_url = img_resample.toFloat().getDownloadURL({'name': 's1_image',
                                                    'bands': band_names,
                                                    'region': geometry,
@@ -171,7 +172,7 @@ def convert_ee_image_to_np_arr(img, band_names, geometry):
     # Method from: https://stackoverflow.com/questions/55852450/how-do-i-unpack-a-numpy-array-of-tuples-into-an-ndarray
     img_arr = rf.structured_to_unstructured(img_data)
 
-    return img_arr
+    return img_arr, img_projection
 
 def interpolator(data):
     """
@@ -298,8 +299,8 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
 
         # Convert s1_image, s2_image to numpy arrays
         if all_exist(S1_BANDS, s1_image.bandNames().getInfo()) and all_exist(S2_BANDS, s2_image.bandNames().getInfo()):
-            s1_data = convert_ee_image_to_np_arr(s1_image, S1_BANDS, aoi)
-            s2_data = convert_ee_image_to_np_arr(s2_image, S2_BANDS, aoi)
+            s1_data, s1_proj = convert_ee_image_to_np_arr(s1_image, S1_BANDS, aoi)
+            s2_data, s2_proj = convert_ee_image_to_np_arr(s2_image, S2_BANDS, aoi)
 
             # Interpolate missing data in s1, s2 images
             s1_filled_data = interpolator(s1_data)
@@ -323,9 +324,9 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
             dw_remap = remap_lulc(dws2_image, 'dynamic_world')  
 
                 # Read these remapped tiles into numpy array, there remapped bands are all called "remapped".
-            esri_arr = convert_ee_image_to_np_arr(esri_remap, 'remapped', aoi)
-            esawc_arr = convert_ee_image_to_np_arr(esawc_remap, 'remapped', aoi)
-            glc10_arr = convert_ee_image_to_np_arr(glc10_remap, 'remapped', aoi)
+            esri_arr, _ = convert_ee_image_to_np_arr(esri_remap, 'remapped', aoi)
+            esawc_arr, _ = convert_ee_image_to_np_arr(esawc_remap, 'remapped', aoi)
+            glc10_arr, _ = convert_ee_image_to_np_arr(glc10_remap, 'remapped', aoi)
             dw_arr = convert_ee_image_to_np_arr(dw_remap, 'remapped', aoi)
 
                 # Get accumulative rainfall from CHIRPS dataset
@@ -362,7 +363,7 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
                 # We also use lng, lat info in the point_id 
             point_id = s2_id + "_" + coord_string
 
-            data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
+            data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_test'
             point_path = os.path.join(data_path, point_id) 
 
             if not os.path.exists(point_path):
@@ -377,6 +378,7 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
             meta_dict['riv_order'] = river_order
             meta_dict['drainage_area'] = drainage_area
             meta_dict['aoi'] = aoi.coordinates().getInfo()
+            meta_dict['projection'] = s2_proj.getInfo()
             meta_dict['s1_id'] = s1_image.get('system:index').getInfo()
             meta_dict['s2_id'] = s2_image.get('system:index').getInfo()
             meta_dict['s1_date'] = clear_s1_date.format('Y-MM-dd').getInfo()
@@ -433,7 +435,7 @@ if __name__ == "__main__":
             point_list.append((coord,riv_order, da))
 
     # print(point_list)
-    for idx, (point, riv_ord, da) in enumerate(point_list):
+    for idx, (point, riv_ord, da) in enumerate(point_list[:10]):
 
         print(f"{idx}: {point}")
         download_1_point_data(point, riv_ord, da)
