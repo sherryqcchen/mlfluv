@@ -76,6 +76,11 @@ def ee_buffer_point(coordinates):
     # print(f"Target area: {2048*2048}")
     return aoi
 
+def ee_mask_invalid_values(image, low_threshold=-1, up_threshold=9):
+    mask = image.gt(low_threshold).And(image.lt(up_threshold))
+    masked = image.updateMask(mask)
+    return masked
+    
 def ee_count_masked_dw_percent(image, geometry):
     """
     Count valid (not NaN) pixel percentage in a Dynamic World (DW) label. 
@@ -90,7 +95,8 @@ def ee_count_masked_dw_percent(image, geometry):
     # image = ee.Image(image)
     
     # Calculate the pixel count in a DW label
-    image_pixels = ee.Image(image).select('label').reduceRegion(reducer=ee.Reducer.count(), geometry=geometry, scale=image.select('label').projection().nominalScale())
+    
+    image_pixels = ee_mask_invalid_values(ee.Image(image)).select('label').reduceRegion(reducer=ee.Reducer.count(), geometry=geometry, scale=image.select('label').projection().nominalScale())
     # Calculate the pixel count 
     total_pixels = ee.Image(1).reduceRegion(reducer= ee.Reducer.count(), geometry=geometry, scale=image.select('label').projection().nominalScale())
 
@@ -184,14 +190,16 @@ def interpolator(data):
 
 
 
-def download_1_point_data(coords, year=2020, VIS_OPTION=False):
+def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OPTION=False):
     """
     Filter Sentinel-1/2 images and 4 LULC labels for a given point in a given year.
     Download all the images as ".npy" files and saved under the directory of point_id
 
     Args:
         year (int, optional): The year to filter data. Defaults to 2020.
-        coords (list, optional): A center point which will be buffered to a square later to download data. Defaults to [-64.85,-16.74].
+        coords (list, optional): A center point which will be buffered to a square later to download data. 
+        river_order (int): river order obtained from HydroSHEDS dataset.
+        drainage_area (float): upland drainage area of the chosen point in the entire basin, data obtained from HydroSHEDS dataset.
 
     Returns:
         no return.
@@ -199,6 +207,7 @@ def download_1_point_data(coords, year=2020, VIS_OPTION=False):
     coord_string = get_lat_lng_string(coords)
 
     aoi = ee_buffer_point(coords)
+    print(river_order)
 
 
         # Filter from the first day to the last day of a given year 
@@ -293,13 +302,13 @@ def download_1_point_data(coords, year=2020, VIS_OPTION=False):
             s2_data = convert_ee_image_to_np_arr(s2_image, S2_BANDS, aoi)
 
             # Interpolate missing data in s1, s2 images
-            if VIS_OPTION:
-                s1_filled_data = interpolator(s1_data)
-                s2_filled_data = interpolator(s2_data)
+            s1_filled_data = interpolator(s1_data)
+            s2_filled_data = interpolator(s2_data)
 
             # Visualize s1, s2 images: plot only works in vscode interactive window 
-            plotter.plot_s1(s1_filled_data, 'vv')
-            plotter.plot_s2_rgb(s2_filled_data)
+            if VIS_OPTION:
+                plotter.plot_s1(s1_filled_data, 'vv')
+                plotter.plot_s2_rgb(s2_filled_data)
                 
             # Merge classes in different LULC products
             esri_label = ee.ImageCollection("projects/sat-io/open-datasets/landcover/ESRI_Global-LULC_10m_TS").filter(col_filter).mosaic()
@@ -365,6 +374,8 @@ def download_1_point_data(coords, year=2020, VIS_OPTION=False):
             meta_dict = {}
             meta_dict['point'] = coords
             meta_dict['year'] = year
+            meta_dict['riv_order'] = river_order
+            meta_dict['drainage_area'] = drainage_area
             meta_dict['aoi'] = aoi.coordinates().getInfo()
             meta_dict['s1_id'] = s1_image.get('system:index').getInfo()
             meta_dict['s2_id'] = s2_image.get('system:index').getInfo()
@@ -402,7 +413,7 @@ if __name__ == "__main__":
 
     ee.Initialize(credentials)
 
-    # If you don't have Earth Engine Service Account Credentials, using following lines
+    # # If you don't have Earth Engine Service Account Credentials, using following lines
     # ee.Authenticate()
     # ee.Initialize()
 
@@ -410,19 +421,19 @@ if __name__ == "__main__":
     year = 2020
 
     # Buffer the point to a rectangle called aoi with 2048*2048 size
-    # coords = [-49.685515651616484,-2.665628314244678]
     points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_da_order_1000_sample.csv')
     
     point_list = []
     with open(points_path, 'r') as file:
         csv_reader = csv.DictReader(file)
         for row in csv_reader:
-            # print(row[1])
-            # print(row['x'], row['y'])
             coord = tuple([float(row['x']), float(row['y'])])
-            point_list.append(coord)
+            riv_order = int(float(row['riv_order']))
+            da = float(row['upland_drainage_area'])
+            point_list.append((coord,riv_order, da))
 
     # print(point_list)
-    for idx, point in enumerate(point_list[24:]):
-        print(f"{idx+24}: {point}")
-        download_1_point_data(point)
+    for idx, (point, riv_ord, da) in enumerate(point_list):
+
+        print(f"{idx}: {point}")
+        download_1_point_data(point, riv_ord, da)

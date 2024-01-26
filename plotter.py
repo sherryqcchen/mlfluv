@@ -86,7 +86,7 @@ def plot_s1(s1_array, vis_option='VV'):
         plt.imshow(rgb_arr)
     plt.show()
 
-def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_array, savefig=False, fig_name=None):
+def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_array, meta_info, savefig=False, fig_name=None):
     
     s2 = cv2.normalize(s2_array[:, :, [3,2,1]],
                         dst=None,
@@ -124,19 +124,28 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
     # Add color bar for reference
     # divider = make_axes_locatable(axes[1,1])
     # cax = divider.append_axes("right", size="5%", pad=0.05)
-    fig.subplots_adjust(right=0.8)
-    cbar_ax = fig.add_axes([0.85, 0.15, 0.02, 0.5])
+    fig.subplots_adjust(top=0.9, right=0.8)
+    cbar_ax = fig.add_axes([0.8, 0.15, 0.02, 0.5])
     cbar = fig.colorbar(im, cax=cbar_ax, ticks=np.arange(0, 8))
     class_names = ['water', 'tree', 'shallow vege', 'crops', 'build', 'fluvial sediment', 'bare', 'ice/snow']
     cbar.ax.set_title('Class', fontsize=20)
     cbar.set_ticklabels(class_names)
     cbar.ax.tick_params(labelsize=16)
 
-    plt.tight_layout(rect=[0, 0, 0.9, 0.95])
+    # TODO Add test to the figure to print meta data of this point
+    point_coords = meta_info['point'][0]
+    year = meta_info['year'][0]
+    river_order = meta_info['riv_order'][0]
+    da = meta_info['drainage_area'][0]
+
+    meta_str = f"Images for {point_coords} in {year}.\n River order: {river_order}, upland drainage area (in pixels): {da}."
+
+    fig.text(0.15, 0.95, meta_str, fontsize=20)
+
     if savefig==True:
         plt.savefig(f'data_figures/{fig_name}.png')
 
-    fig.show()
+    # fig.show()
 
 
 
