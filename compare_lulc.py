@@ -2,26 +2,128 @@
 import shutil
 import glob
 import os
+import json
+import geojson
 import numpy as np
 import pandas as pd
+import rioxarray
+import xarray as xr
 import plotter
+from affine import Affine
 
+import rasterio
+from rasterio.transform import from_origin
+from rasterio.enums import Resampling
+
+
+def get_bounding_box(coord_list):
+    """Method from https://gis.stackexchange.com/questions/313011/convert-geojson-object-to-bounding-box-using-python-3-6
+    Extract bounding box from a list of coordinates
+    Args:
+        coord_list (_type_): _description_
+
+    Returns:
+        list: _description_
+    """    
+    coords = np.array(list(geojson.utils.coords(coord_list)))
+    xmin = coords[:, 0].min() # minimum longitude
+    xmax = coords[:, 0].max() # maximum longitude
+    ymin = coords[:, 1].min() # minimum latitude
+    ymax = coords[:, 1].max() # maximum latitude
+    return xmin, xmax, ymin, ymax
+
+def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
+    arr = np.load(npy_path)
+    meta_df = pd.read_csv(meta_info_path)
+    
+    projection = json.loads(meta_df['projection'][0].replace("\'", "\""))
+    crs = projection['crs']
+
+    # This transformation is not correct since it only has a scale, no xshearing, xtranslation, yshearing, ytranslation
+    # Check some discussion about it: https://gis.stackexchange.com/questions/443080/how-to-access-image-crs-transform-from-ee-projection-object-in-earth-engine
+    transform = projection['transform'] 
+
+    # Get scale (pixel size)
+    scale = transform[0]
+
+    aoi_coords = json.loads(meta_df['aoi'][0])
+    xmin, xmax, ymin, ymax = get_bounding_box(aoi_coords)
+    
+    # Fix the transformation
+    fixed_transform = from_origin(xmin, ymax, scale, scale)  
+
+    out_path = os.path.join(out_tiff_dir, os.path.basename(npy_path).split('.')[0]+'.tif')
+
+    # Define the output TIFF file path
+    if which_data == 's2':
+        # Select RGB bands (assuming 0-based indexing)
+        rgb_data = arr[:, :, [3, 2, 1]]
+        # Write the RGB NumPy array to a GeoTIFF file
+        with rasterio.open(
+                out_path,
+                'w',
+                driver='GTiff',
+                height=rgb_data.shape[0],
+                width=rgb_data.shape[1],
+                count=rgb_data.shape[2],  # Number of bands (RGB)
+                dtype=rgb_data.dtype,
+                crs=crs,
+                transform=transform,
+                nodata=-999  # Set if there is a nodata value
+        ) as dst:
+            dst.write(rgb_data.transpose(2, 0, 1)) 
+                
+    elif which_data == 's1':
+        # Select VV band (assuming 0-based indexing)
+        vv_data = s1_arr[:, :, 0]
+        # Write the VV NumPy array to a GeoTIFF file
+        with rasterio.open(
+                out_path,
+                'w',
+                driver='GTiff',
+                height=vv_data.shape[0],
+                width=vv_data.shape[1],
+                count=1,  # Number of bands (VV)
+                dtype=vv_data.dtype,
+                crs=crs,
+                transform=transform,
+                nodata=-999  # Set if there is a nodata value
+        ) as dst:
+            dst.write(vv_data, 1)  # Writing the VV ndarray to the TIFF file
+        
+    else:
+        # For all kinds or labels with dimensions [length, width, 1]
+        # Write the label NumPy array to a TIFF file
+        label = arr#.squeeze()
+        with rasterio.open(
+                out_path,
+                'w',
+                driver='GTiff',
+                height=label.shape[0],
+                width=label.shape[1],
+                count=1,  # Number of bands
+                dtype=label.dtype,
+                crs=crs,
+                transform=fixed_transform,
+                nodata=-999  # Set if there is a nodata value
+        ) as dst:
+            dst.write(label.transpose(2, 0, 1))  # Writing the ndarray to the TIFF file
 
 
 if __name__=='__main__':
 
     PLOT_DATA = False
 
-    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
+    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_test'
     point_path_list = glob.glob(os.path.join(data_path, '*'))
     print(len(point_path_list))
     
     water_point_path = []
     fluvial_point_path = []
-    for idx, point_path in enumerate(point_path_list):
+    for idx, point_path in enumerate(point_path_list[:20]):
         
         point_id = os.path.basename(point_path)
-        # print(f"{idx}: {point_id}")
+        print(f"{idx}: {point_id}")
 
         file_paths = [os.path.join(point_path, fname) for fname in os.listdir(point_path)]
 
@@ -37,7 +139,7 @@ if __name__=='__main__':
 
         esri_arr = np.load(esri_label_path)
         glc10_arr = np.load(glc10_label_path)
-        dw_arr = np.load(dw_label_path)
+        # dw_arr = np.load(dw_label_path)
         esawc_arr = np.load(esawc_label_path)
 
         s1_arr = np.load(s1_path)
@@ -54,7 +156,7 @@ if __name__=='__main__':
         #     water_point_path.append(point_path)
 
         # Check if ESRI label has any water pixel (its pixel value is 0) and bare pixels (6)
-        if np.isin(esri_arr, 0).any() and  np.isin(esri_arr, 6).any():
+        if np.isin(esri_arr, 0).any() and np.isin(esri_arr, 6).any():
             fluvial_point_path.append(point_path)
 
 
@@ -65,17 +167,34 @@ if __name__=='__main__':
     for path in fluvial_point_path:    
 
         water_point_id = os.path.basename(path)
-        
+
+        # Convert bare pixels in esri to sediment pixels, and write out the Sentinel-1/2, ESRI label to tif
+        file_paths = [os.path.join(path, fname) for fname in os.listdir(path)]
+
+        esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
+
+        s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
+        s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]
+
+        meta_path = [file for file in file_paths if file.endswith('.csv')][0]
+
         # Create a folder in the new directory
         new_path = os.path.join(dest_path, water_point_id)
         if not os.path.exists(new_path):
             os.makedirs(new_path)
+
+        convert_npy_to_tiff(s1_path, 's1', meta_path, new_path)
+        convert_npy_to_tiff(s2_path, 's2', meta_path, new_path)
+        convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path)       
+
 
         for fname in os.listdir(path):
             file_path = os.path.join(path, fname)
             shutil.copy(file_path, new_path)
 
     # TODO convert bare pixels to sediment label for all images in the new fluvial folder:
+    # TODO Write out the Sentinel-2, ESRI label to tif
+    # TODO Download Planet images for the same aoi, create hand label using QGIS
              
 
 

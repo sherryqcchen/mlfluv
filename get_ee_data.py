@@ -189,9 +189,20 @@ def interpolator(data):
         data = interp(*np.indices(data.shape))
     return data
 
+# def ee_download_tiff(img, aoi, save_path, scale):
+
+#     download_url = img.getDownloadURL({
+#         'region': aoi,
+#         'scale': scale
+#     })
+
+#     os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+#     downloadFromWeb(download_url, save_path)
 
 
-def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OPTION=False):
+
+def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OPTION=False, TIF_option=False):
     """
     Filter Sentinel-1/2 images and 4 LULC labels for a given point in a given year.
     Download all the images as ".npy" files and saved under the directory of point_id
@@ -327,7 +338,7 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
             esri_arr, _ = convert_ee_image_to_np_arr(esri_remap, 'remapped', aoi)
             esawc_arr, _ = convert_ee_image_to_np_arr(esawc_remap, 'remapped', aoi)
             glc10_arr, _ = convert_ee_image_to_np_arr(glc10_remap, 'remapped', aoi)
-            dw_arr = convert_ee_image_to_np_arr(dw_remap, 'remapped', aoi)
+            dw_arr, _ = convert_ee_image_to_np_arr(dw_remap, 'remapped', aoi)
 
                 # Get accumulative rainfall from CHIRPS dataset
             rainfall = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY')\
@@ -363,7 +374,7 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
                 # We also use lng, lat info in the point_id 
             point_id = s2_id + "_" + coord_string
 
-            data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_test'
+            data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
             point_path = os.path.join(data_path, point_id) 
 
             if not os.path.exists(point_path):
@@ -398,6 +409,9 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
             np.save(os.path.join(point_path, point_id+'_ESAWC.npy'), esawc_arr)
             np.save(os.path.join(point_path, point_id+'_DW.npy'), dw_arr)
             np.save(os.path.join(point_path, point_id+'_GLC10.npy'), glc10_arr)
+
+            # if TIF_option:
+                
 
         else:
             print('S1 or S2 has missing bands, skip this point.')
@@ -435,7 +449,7 @@ if __name__ == "__main__":
             point_list.append((coord,riv_order, da))
 
     # print(point_list)
-    for idx, (point, riv_ord, da) in enumerate(point_list[:10]):
+    for idx, (point, riv_ord, da) in enumerate(point_list):
 
         print(f"{idx}: {point}")
         download_1_point_data(point, riv_ord, da)
