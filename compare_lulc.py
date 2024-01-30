@@ -9,11 +9,9 @@ import pandas as pd
 import rioxarray
 import xarray as xr
 import plotter
-from affine import Affine
 
 import rasterio
 from rasterio.transform import from_origin
-from rasterio.enums import Resampling
 
 
 def get_bounding_box(coord_list):
@@ -34,7 +32,7 @@ def get_bounding_box(coord_list):
     ymax = coords[:, 1].max() # maximum latitude
     return xmin, xmax, ymin, ymax
 
-def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
+def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, remap_sediment=False):
     """
     Convert numpy ndarray from .npy file to tiff for visualization and labelling.
 
@@ -104,8 +102,11 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
         
     else:
         # For all kinds or labels with dimensions [length, width, 1]
-        # Write the label NumPy array to a TIFF file
-        label = arr#.squeeze()
+        # Write the label Numpy array to a TIFF file
+        if remap_sediment:
+            arr[arr == 6] = 5
+
+        label = arr #.squeeze()
         with rasterio.open(
                 out_path,
                 'w',
@@ -123,15 +124,18 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
 
 if __name__=='__main__':
 
-    PLOT_DATA = False
+    PLOT_DATA = True
+    CONVERT_TO_TIFF = True
+    REMAP_SEDIMENT = True
 
     data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
+    
     point_path_list = glob.glob(os.path.join(data_path, '*'))
-    print(len(point_path_list))
+    print(f"The count of total downloaded data points: {len(point_path_list)}")
     
     water_point_path = []
     fluvial_point_path = []
-    for idx, point_path in enumerate(point_path_list[:10]):
+    for idx, point_path in enumerate(point_path_list):
         
         point_id = os.path.basename(point_path)
         print(f"{idx}: {point_id}")
@@ -150,16 +154,17 @@ if __name__=='__main__':
 
         esri_arr = np.load(esri_label_path)
         glc10_arr = np.load(glc10_label_path)
-        # dw_arr = np.load(dw_label_path)
+        dw_arr = np.load(dw_label_path)
         esawc_arr = np.load(esawc_label_path)
 
         s1_arr = np.load(s1_path)
         s2_arr = np.load(s2_path)
 
-        # read meta data of this point
-        meta_df = pd.read_csv(meta_path)
-
         if PLOT_DATA:
+            # Plot out all the images to compare how useful 4 global LULC products are. 
+
+            # read meta data of this point
+            meta_df = pd.read_csv(meta_path)
             plotter.plot_full_data(s1_arr, s2_arr, esri_arr, esawc_arr, dw_arr, glc10_arr, meta_df, True, point_id)
         
         # Check if ESRI label has any water pixel (its pixel value is 0)
@@ -173,14 +178,15 @@ if __name__=='__main__':
 
 
     # copy a list of folders with water pixels to a new directory       
-    print(len(fluvial_point_path))
+    print(f"The count of data points that have water and bare pixels: {len(fluvial_point_path)}")
+
+    # The path for storing the data with both water and bare pixels
     dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_fluvial'
     
     for path in fluvial_point_path:    
 
         water_point_id = os.path.basename(path)
 
-        # Convert bare pixels in esri to sediment pixels, and write out the Sentinel-1/2, ESRI label to tif
         file_paths = [os.path.join(path, fname) for fname in os.listdir(path)]
 
         esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
@@ -194,18 +200,53 @@ if __name__=='__main__':
         new_path = os.path.join(dest_path, water_point_id)
         if not os.path.exists(new_path):
             os.makedirs(new_path)
-
-        convert_npy_to_tiff(s1_path, 's1', meta_path, new_path)
-        convert_npy_to_tiff(s2_path, 's2', meta_path, new_path)
-        convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path)       
-
+        
+        # Convert Sentinel-1&2 and ESRI label to tiff and write out in the new fluvial directory
+        if CONVERT_TO_TIFF:
+            convert_npy_to_tiff(s1_path, 's1', meta_path, new_path)
+            convert_npy_to_tiff(s2_path, 's2', meta_path, new_path)
+            convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path, REMAP_SEDIMENT)  # remap_sediment = True      
 
         for fname in os.listdir(path):
             file_path = os.path.join(path, fname)
             shutil.copy(file_path, new_path)
 
-    # TODO convert bare pixels to sediment label for all images in the new fluvial folder:
-    # TODO Write out the Sentinel-2, ESRI label to tif
+    fluv_point_path_list = glob.glob(os.path.join(dest_path, '*'))
+    
+    for path in fluv_point_path_list:
+
+        point_id = os.path.basename(path)
+
+        file_paths = [os.path.join(path, fname) for fname in os.listdir(path)]
+
+        esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
+        s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
+        s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]
+
+        meta_path = [file for file in file_paths if file.endswith('.csv')][0]
+
+        if REMAP_SEDIMENT:
+            # convert bare pixels (6) to sediment label (5) for all images in the new fluvial folder:
+            esri_arr = np.load(esri_label_path)
+            esri_arr[esri_arr == 6] = 5
+            
+            new_esri_path = esri_label_path.split('.')[0] + '_sedi.npy'
+            np.save(new_esri_path, esri_arr) 
+
+        # TODO Plot S1, S2, ESRI label
+        if PLOT_DATA:
+            s1_arr = np.load(s1_path)
+            s2_arr = np.load(s2_path)
+            meta_df = pd.read_csv(meta_path)
+
+            plotter.plot_s12label(s1_arr, s2_arr, esri_arr, meta_df, True, point_id)
+
+        
+
+        
+
+    # TODO trim data to 512*512 in the dataloader
+    
     # TODO Download Planet images for the same aoi, create hand label using QGIS
              
 

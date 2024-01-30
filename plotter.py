@@ -86,6 +86,57 @@ def plot_s1(s1_array, vis_option='VV'):
         plt.imshow(rgb_arr)
     plt.show()
 
+def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig_name=None):
+
+    s2 = cv2.normalize(s2_array[:, :, [3,2,1]],
+                    dst=None,
+                    alpha=0,
+                    beta=255,
+                    norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+    s1 = s1_array[:,:,0]
+
+    lulc_cmap = mpl.colors.ListedColormap(['#4183C4', '#009600', '#CCFF99', '#F096FF', '#FA0000', '#FFBB22', '#B4B4B4', '#6BF5FF'])
+
+    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 5))
+
+    for i, ax in enumerate(axes.flat):
+        if i == 0:
+            im = ax.imshow(s1)
+            ax.set_title('Sentinel-1 VV polarization', fontsize=20)
+        elif i == 1:
+            im = ax.imshow(s2)
+            ax.set_title('Sentinel-2 RGB stack', fontsize=20)
+        elif i == 2:
+            im = ax.imshow(label_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            ax.set_title('Remapped ESRI label', fontsize=20)
+    
+     # Add color bar for reference
+    fig.subplots_adjust(top=0.8, right=0.8)
+    cbar_ax = fig.add_axes([0.82, 0.15, 0.02, 0.7])
+    cbar = fig.colorbar(im, cax=cbar_ax, ticks=np.arange(0, 8))
+    class_names = ['water', 'tree', 'shallow vege', 'crops', 'build', 'fluvial sediment', 'bare', 'ice/snow']
+    cbar.ax.set_title('Class', fontsize=20)
+    cbar.set_ticklabels(class_names)
+    cbar.ax.tick_params(labelsize=16)
+
+    # Add test to the figure to print meta data of this point
+    point_coords = meta_info['point'][0]
+    year = meta_info['year'][0]
+    river_order = meta_info['riv_order'][0]
+    da = meta_info['drainage_area'][0]
+
+    meta_str = f"Images for {point_coords} in {year}.\n River order: {river_order}, upland drainage area: {da} km \u00B2."
+
+    fig.text(0.10, 0.85, meta_str, fontsize=18)
+
+    if savefig==True:
+        plt.savefig(f'data_figures/{fig_name}_fluv.png')
+    
+    plt.cla()
+    plt.close(fig)
+
+    
+
 def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_array, meta_info, savefig=False, fig_name=None):
     """
     Plot Sentinel-1&2 images and 4 types of land cover products, expot to png.
@@ -135,8 +186,6 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
             ax.set_title('FROM-GLC10 label', fontsize=20)
 
     # Add color bar for reference
-    # divider = make_axes_locatable(axes[1,1])
-    # cax = divider.append_axes("right", size="5%", pad=0.05)
     fig.subplots_adjust(top=0.9, right=0.8)
     cbar_ax = fig.add_axes([0.8, 0.15, 0.02, 0.5])
     cbar = fig.colorbar(im, cax=cbar_ax, ticks=np.arange(0, 8))
@@ -145,7 +194,7 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
     cbar.set_ticklabels(class_names)
     cbar.ax.tick_params(labelsize=16)
 
-    # TODO Add test to the figure to print meta data of this point
+    # Add test to the figure to print meta data of this point
     point_coords = meta_info['point'][0]
     year = meta_info['year'][0]
     river_order = meta_info['riv_order'][0]
