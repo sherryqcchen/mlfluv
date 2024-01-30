@@ -17,13 +17,15 @@ from rasterio.enums import Resampling
 
 
 def get_bounding_box(coord_list):
-    """Method from https://gis.stackexchange.com/questions/313011/convert-geojson-object-to-bounding-box-using-python-3-6
-    Extract bounding box from a list of coordinates
+    """
+    Method from https://gis.stackexchange.com/questions/313011/convert-geojson-object-to-bounding-box-using-python-3-6
+    Extract bounding box from a list of coordinates.
+
     Args:
-        coord_list (_type_): _description_
+        coord_list (list): geometry coordinates exported from GEE
 
     Returns:
-        list: _description_
+        list: minimum and maximum longitudes and latitudes of the geometry
     """    
     coords = np.array(list(geojson.utils.coords(coord_list)))
     xmin = coords[:, 0].min() # minimum longitude
@@ -33,6 +35,15 @@ def get_bounding_box(coord_list):
     return xmin, xmax, ymin, ymax
 
 def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
+    """
+    Convert numpy ndarray from .npy file to tiff for visualization and labelling.
+
+    Args:
+        npy_path (str): path to npy file.
+        which_data (str): 's1', 's2' or 'label'.
+        meta_info_path (str): path to meta information csv file.
+        out_tiff_dir (str): the derectory of exporting tiff.
+    """    
     arr = np.load(npy_path)
     meta_df = pd.read_csv(meta_info_path)
     
@@ -68,7 +79,7 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
                 count=rgb_data.shape[2],  # Number of bands (RGB)
                 dtype=rgb_data.dtype,
                 crs=crs,
-                transform=transform,
+                transform=fixed_transform,
                 nodata=-999  # Set if there is a nodata value
         ) as dst:
             dst.write(rgb_data.transpose(2, 0, 1)) 
@@ -86,7 +97,7 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
                 count=1,  # Number of bands (VV)
                 dtype=vv_data.dtype,
                 crs=crs,
-                transform=transform,
+                transform=fixed_transform,
                 nodata=-999  # Set if there is a nodata value
         ) as dst:
             dst.write(vv_data, 1)  # Writing the VV ndarray to the TIFF file
@@ -114,13 +125,13 @@ if __name__=='__main__':
 
     PLOT_DATA = False
 
-    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_test'
+    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
     point_path_list = glob.glob(os.path.join(data_path, '*'))
     print(len(point_path_list))
     
     water_point_path = []
     fluvial_point_path = []
-    for idx, point_path in enumerate(point_path_list[:20]):
+    for idx, point_path in enumerate(point_path_list[:10]):
         
         point_id = os.path.basename(point_path)
         print(f"{idx}: {point_id}")
@@ -157,6 +168,7 @@ if __name__=='__main__':
 
         # Check if ESRI label has any water pixel (its pixel value is 0) and bare pixels (6)
         if np.isin(esri_arr, 0).any() and np.isin(esri_arr, 6).any():
+
             fluvial_point_path.append(point_path)
 
 
