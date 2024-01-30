@@ -189,18 +189,6 @@ def interpolator(data):
         data = interp(*np.indices(data.shape))
     return data
 
-# def ee_download_tiff(img, aoi, save_path, scale):
-
-#     download_url = img.getDownloadURL({
-#         'region': aoi,
-#         'scale': scale
-#     })
-
-#     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-#     downloadFromWeb(download_url, save_path)
-
-
 
 def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OPTION=False, TIF_option=False):
     """
