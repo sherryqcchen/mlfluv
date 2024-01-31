@@ -114,7 +114,7 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, rema
                 height=label.shape[0],
                 width=label.shape[1],
                 count=1,  # Number of bands
-                dtype=label.dtype,
+                dtype=int(label.dtype),
                 crs=crs,
                 transform=fixed_transform,
                 nodata=-999  # Set if there is a nodata value
@@ -128,7 +128,7 @@ if __name__=='__main__':
     CONVERT_TO_TIFF = True
     REMAP_SEDIMENT = True
 
-    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
+    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_1000_sample'
     
     point_path_list = glob.glob(os.path.join(data_path, '*'))
     print(f"The count of total downloaded data points: {len(point_path_list)}")
@@ -168,22 +168,22 @@ if __name__=='__main__':
             plotter.plot_full_data(s1_arr, s2_arr, esri_arr, esawc_arr, dw_arr, glc10_arr, meta_df, True, point_id)
         
         # Check if ESRI label has any water pixel (its pixel value is 0)
-        # if np.isin(esri_arr, 0).any():
-        #     water_point_path.append(point_path)
+        if np.isin(esri_arr, 0).any():
+            water_point_path.append(point_path)
 
         # Check if ESRI label has any water pixel (its pixel value is 0) and bare pixels (6)
-        if np.isin(esri_arr, 0).any() and np.isin(esri_arr, 6).any():
+        # if np.isin(esri_arr, 0).any() and np.isin(esri_arr, 6).any():
 
-            fluvial_point_path.append(point_path)
+        #     fluvial_point_path.append(point_path)
 
 
     # copy a list of folders with water pixels to a new directory       
-    print(f"The count of data points that have water and bare pixels: {len(fluvial_point_path)}")
+    print(f"The count of data points that have water and bare pixels: {len(water_point_path)}")
 
     # The path for storing the data with both water and bare pixels
-    dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_fluvial'
+    dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_1000_sample'
     
-    for path in fluvial_point_path:    
+    for path in water_point_path:    
 
         water_point_id = os.path.basename(path)
 
@@ -230,7 +230,7 @@ if __name__=='__main__':
             esri_arr = np.load(esri_label_path)
             esri_arr[esri_arr == 6] = 5
             
-            new_esri_path = esri_label_path.split('.')[0] + '_sedi.npy'
+            new_esri_path = esri_label_path.split('.')[0] + '_water.npy'
             np.save(new_esri_path, esri_arr) 
 
         # TODO Plot S1, S2, ESRI label
