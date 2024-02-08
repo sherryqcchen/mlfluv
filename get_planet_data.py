@@ -1,3 +1,17 @@
+'''
+
+Author: Qiuyang Chen
+Contact: qiuyangschen@gmail.com
+
+This scrip is used to download validating Planet Scene images for MLFluv. 
+It uses AOI geometry  and clear s2 date from each data point in MLFluv to filter data.
+It fillter the scenes with less than 5% cloud cover with a month of the given date.
+Once a qualified scene is found, the scrip creates the order in batches and download orders once the ordered are ready. 
+Quite often the Planet Order API takes time to run the oder jobs after the order creation. 
+This script should be run (at least) twice: to create order for the first time, and later run again to download orders. 
+It is suggested to monitor order status on the Planet Account website. 
+'''
+
 import datetime
 import json
 import os
@@ -11,7 +25,7 @@ import asyncio
 import planet
 from planet import Auth, Session, DataClient, OrdersClient, order_request, reporting
 
-from compare_lulc import get_bounding_box
+from label_prepare import get_bounding_box
 from rasterio.transform import from_origin
 
 
@@ -100,7 +114,7 @@ async def cancel_order(order_id):
         await client.cancel_order(order_id=order_id)
 
 
-def search_planet_data(geometry, date_start, date_end):
+def search_planet_data(job_name, geometry, date_start, date_end):
     """
     Search available planet data using Data API by given polygon geometry, start date and end date.
 
@@ -127,7 +141,7 @@ def search_planet_data(geometry, date_start, date_end):
     item_type = ["PSScene"]
 
     # Run a quick search for our data
-    result_list = asyncio.run(search_Planet(f'{point_id}', combined_filter, item_type))
+    result_list = asyncio.run(search_Planet(job_name, combined_filter, item_type))
     # print(len(result_list))
     return result_list
 
@@ -142,21 +156,20 @@ def monitor_Planet_account_quota(API_KEY):
     print(f"The left quota is : {rest_quota} km2.")
 
 
-if __name__ == "__main__":
+def order_100_data(path_list):
+    """
+    Create and download maximum 100 Planet jobs from a given path.
+    Because the list_PS_orderfunction only searches the latest 100 orders, this function can only take maximum 100 orders each time
 
-    API_KEY = os.environ.get('PL_API_KEY', '')
-    print(API_KEY)
+    Args:
+        path_list (list): A data path list of MLFluv data that requires labeling 
+    """   
 
-    client = Auth.from_key(API_KEY)
-
-    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_fluvial_from_1000_sample'
-
-    point_path_list = [os.path.join(data_path, folder) for folder in os.listdir(data_path)]
-
-
-    for point_folder in point_path_list:
+    for idx, point_folder in enumerate(path_list):
 
         point_id = os.path.basename(point_folder)
+
+        print(f"Start to search for {idx} point {point_id}")
 
         meta_csv_path = [os.path.join(point_folder, file) for file in os.listdir(point_folder) if file.endswith('.csv')][0]
 
@@ -177,14 +190,25 @@ if __name__ == "__main__":
         date_start = s2_date
         date_end = s2_date + datetime.timedelta(days=1)
 
-        result_list = search_planet_data(geometry, date_start, date_end)
+        result_list = search_planet_data(f'{point_id}', geometry, date_start, date_end)
 
         if len(result_list) == 0:
             print(f"No scene for point {point_id} is detected. Let's expand the date search range to 7 days before to 7 days after the given date.")
             date_start = s2_date - datetime.timedelta(days=7)
             date_end = s2_date + datetime.timedelta(days=7)
 
-            result_list = search_planet_data(geometry, date_start, date_end)
+            result_list = search_planet_data(f'{point_id}', geometry, date_start, date_end)
+
+            if len(result_list) == 0:
+                print(f"No scene for point {point_id} is detected. Let's expand the date search range to 15 days before to 15 days after the given date.")
+                date_start = s2_date - datetime.timedelta(days=7)
+                date_end = s2_date + datetime.timedelta(days=7)
+
+                result_list = search_planet_data(f'{point_id}', geometry, date_start, date_end)
+
+                if len(result_list) == 0:
+                    print("No clear Planet data available within one month, skip this point.")
+                    continue # skip the rest of the code i a for loop because we can't find data
 
         # Get a pd dataframe of all available scenes
         ps_scenes = items_to_scenes(result_list)
@@ -224,6 +248,8 @@ if __name__ == "__main__":
             pass
 
         elif os.path.isdir(write_out_dir) and len(os.listdir(write_out_dir)) == 0:
+            # Be aware this line can return maximum 100 lines of results. 
+            # If a list is longer than this, it only counts the latest 100 orders. 
             orders_list = asyncio.run(list_PS_order())
             repeated_order = []
             for order in orders_list:
@@ -258,11 +284,28 @@ if __name__ == "__main__":
                         print('Suspect no harmonization tool available for chosen images. Update filter tool and try download again.')
                         pass                            
 
-                # else: 
-                #     # For the case a order has never been made
-                #     os.mkdir(write_out_dir)
 
-        print()
+if __name__ == "__main__":
+
+    API_KEY = os.environ.get('PL_API_KEY', '')
+    print(API_KEY)
+
+    client = Auth.from_key(API_KEY)
+
+    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_1000_sample'
+
+    point_path_list = [os.path.join(data_path, folder) for folder in os.listdir(data_path)]
+
+    sub_lists = [point_path_list[x:x+100] for x in range(0, len(point_path_list), 100)]
+    print(len(sub_lists))
+
+
+    # TODO batch the following process to download 100 points each time
+
+    # Run this multiple times (at least twice) until all data (maximum 100) is downloaded. 
+    # Then switch to a new sub list 
+    order_100_data(sub_lists[5])
+    # print()
 
 
 
