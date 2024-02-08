@@ -48,14 +48,17 @@ def split_n_folds(n, folder_list, save_dir=None):
     '''
 
     print(f'All data folders are split into {n} folds.')
-    s = list(range(1, len(folder_list)))
-    random.shuffle(s)
-    s = [s[i::n] for i in range(n)]
+    paths_per_fold = len(folder_list) // n
+    folds = [folder_list[i * paths_per_fold: (i + 1) * paths_per_fold] for i in range(n)]
+
+    # s = list(range(1, len(folder_list)))
+    random.shuffle(folds)
+    # s = [s[i::n] for i in range(n)]
 
     # save the data path split by 5 folds in npy files
     if save_dir is None:
         save_dir = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds'
-    for i, fold in enumerate(s):
+    for i, fold in enumerate(folds):
         fold_fname = f"fold_{i}.npy"
         fold_path = os.path.join(save_dir, fold_fname)
         np.save(fold_path, fold)
