@@ -1,3 +1,10 @@
+# This scrip is used to examine and plot all data: S1, S2, ESRI label, ESA label, FROM-GL10 label and DW label.
+# The plots are examined to decide which label product is better suited to generate labels for fluvial system. 
+# ESRI is used for making the MLFluv labels. All the bareland class pixels are converted to fluvial sediment class. 
+# Filter out all the ESRI labels that contains water pixels. We use these labels as the starting point to make hand labels.
+# Convert S1, S2 and ESRI label from npy files to tif files, so that they can be opened in QGIS. 
+# Fowllowing this script, download Planet images for the same aoi, create hand labels by fixing ESRI labels in QGIS (usnig Thrase plugin).
+
 
 import shutil
 import glob
@@ -114,7 +121,7 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, rema
                 height=label.shape[0],
                 width=label.shape[1],
                 count=1,  # Number of bands
-                dtype=int(label.dtype),
+                dtype='int32',
                 crs=crs,
                 transform=fixed_transform,
                 nodata=-999  # Set if there is a nodata value
@@ -136,6 +143,12 @@ if __name__=='__main__':
     water_point_path = []
     fluvial_point_path = []
     for idx, point_path in enumerate(point_path_list):
+        # print(point_path)
+
+        # if '20200106T151701_20200106T151658_T18MWB_325S7405W' in point_path:
+        #     print(f'I find this weird point at index {idx}.')
+        # else:
+        #     continue
         
         point_id = os.path.basename(point_path)
         print(f"{idx}: {point_id}")
@@ -159,6 +172,16 @@ if __name__=='__main__':
 
         s1_arr = np.load(s1_path)
         s2_arr = np.load(s2_path)
+    
+        # Create a mask for invalid data in S2 image, replace invalid data with NaNs
+        s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
+
+        # Convert invalid values (NaNs) in S1 image to np.nan
+        s1_arr[~np.isfinite(s1_arr)] = np.nan
+
+        # Drop data point that contains nan, continue to next point
+        if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
+            continue
 
         if PLOT_DATA:
             # Plot out all the images to compare how useful 4 global LULC products are. 
@@ -170,11 +193,6 @@ if __name__=='__main__':
         # Check if ESRI label has any water pixel (its pixel value is 0)
         if np.isin(esri_arr, 0).any():
             water_point_path.append(point_path)
-
-        # Check if ESRI label has any water pixel (its pixel value is 0) and bare pixels (6)
-        # if np.isin(esri_arr, 0).any() and np.isin(esri_arr, 6).any():
-
-        #     fluvial_point_path.append(point_path)
 
 
     # copy a list of folders with water pixels to a new directory       
@@ -233,7 +251,7 @@ if __name__=='__main__':
             new_esri_path = esri_label_path.split('.')[0] + '_water.npy'
             np.save(new_esri_path, esri_arr) 
 
-        # TODO Plot S1, S2, ESRI label
+        # Plot S1, S2, ESRI label
         if PLOT_DATA:
             s1_arr = np.load(s1_path)
             s2_arr = np.load(s2_path)
@@ -247,7 +265,7 @@ if __name__=='__main__':
 
     # TODO trim data to 512*512 in the dataloader
     
-    # TODO Download Planet images for the same aoi, create hand label using QGIS
+
              
 
 
