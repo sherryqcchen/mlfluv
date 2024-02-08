@@ -1,6 +1,7 @@
 import json
 import os
 import glob
+import random
 import rasterio
 import xarray as xr
 import numpy as np
@@ -34,18 +35,44 @@ def delete_folder(folder_path):
     except Exception as e:
         print(f"Error deleting {folder_path}: {e}")
 
+def split_n_folds(n, folder_list, save_dir=None):
+    '''
+    Split a list of folders into n folds
+    Author: QC
+    Args:
+        n: int, n folds.
+        folder_list: list, a list of folder paths where all data points are stored.
+        out_fname: the path of json file that store split information.
+    Return:
+        n_folds: dictionary, the key is named as 'fold_n', and the value under each key is a list of folder paths that are stored under this fold.
+    '''
+
+    print(f'All data folders are split into {n} folds.')
+    s = list(range(1, len(folder_list)))
+    random.shuffle(s)
+    s = [s[i::n] for i in range(n)]
+
+    # save the data path split by 5 folds in npy files
+    if save_dir is None:
+        save_dir = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds'
+    for i, fold in enumerate(s):
+        fold_fname = f"fold_{i}.npy"
+        fold_path = os.path.join(save_dir, fold_fname)
+        np.save(fold_path, fold)
+
+
 if __name__ == '__main__':
     
     labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_1000_sample_labelled'
 
-    # hand_label_list = glob.glob(os.path.join(labelled_data_path, '**/*hand.tif'))
-    # print(len(hand_label_list))
+    hand_label_list = glob.glob(os.path.join(labelled_data_path, '**/*hand.tif'))
+    print(len(hand_label_list))
 
     # broken_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/labelled_data_with_NaNs'
     label_list = []
     # compare_list = []
     for folder in os.listdir(labelled_data_path):
-        print(folder)
+        # print(folder)
         folder_path = os.path.join(labelled_data_path, folder)
         file_paths = [os.path.join(folder_path, file) for file in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, file))]
         
@@ -84,46 +111,13 @@ if __name__ == '__main__':
 
             # # Option 2: Delete this data folder and all the content 
             # delete_folder(folder_path)
-
+            
+            # Option 3: ignore this data point, continue to examine next data point
             continue
         else:
             label_list.append(folder_path)
     
     print(len(label_list))
 
-
-
-
-                
-
-                
-                
-            
-
-    # train_paths = data['fold_0'] + data['fold_1'] + data['fold_2'] # size 111
-
-    # val_paths = data['fold_3'] # size 36
-
-    # test_paths = data['fold_4'] # size 36
-
-    # print(len(train_paths)) 
-
-    # print(train_paths[0])
-
-    # # Get label from a train data point folder
-    # files = os.listdir(train_paths[0])
-    # print(files)
-    # label_fname = [file for file in files if file.startswith('DWlabel')][0]
-    # clear_s2_fname = [file for file in files if file.startswith('clearS2')][0]
-    # label_path = os.path.join(train_paths[0], label_fname)
-    # clear_s2_path = os.path.join(train_paths[0], clear_s2_fname)
-    
-    # label = xr.open_dataarray(label_path)
-    # clear_s2 = xr.open_dataarray(clear_s2_path)
-
-    # print(label.crs)
-
-    
-
-
-
+    # Random shuffle data and split them into 5 folds
+    split_n_folds(5, label_list)

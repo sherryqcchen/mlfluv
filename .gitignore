@@ -8,7 +8,7 @@ venv/
 Amazon_HydroSHEDS_river_basin/
 Amazon_HydroSHEDS_river_networks/
 basins/
-data/figures
+/data_figures
 
 # Ignore the cloned repository
 gee_s1_ard/
@@ -23,11 +23,14 @@ gee_s1_ard/
 # Ignore image files
 *.tif
 *.npy
-*.png
+# *.png
 *.jpeg
 
 # Ignore output json files
 fold_split.json
+
+# Ignore archived scripts
+dataset_prepare_archieved.py
 
 # Ignore GEE-API key file 
 sen12flood-qiuyangchen-8fdb42008616.json
