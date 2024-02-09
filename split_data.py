@@ -1,11 +1,7 @@
-import json
 import os
 import glob
 import random
-import rasterio
-import xarray as xr
 import numpy as np
-import rioxarray
 import shutil
 
 def move_files(src_dir, dest_dir):
@@ -59,9 +55,20 @@ def split_n_folds(n, folder_list, save_dir=None):
     if save_dir is None:
         save_dir = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds'
     for i, fold in enumerate(folds):
+        # print(fold)
+        
+        fold_list = []
+        for path in fold:
+            file_paths = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('S1.npy') 
+                          or file.endswith('S2.npy') 
+                          or file.endswith('hand.tif') 
+                          or file.endswith('ESRI.npy')]
+            file_paths.sort() # Sorted order is: ESRI.npy, ESRI_hand.tif, S1.noy, S2.npy
+            fold_list.append(file_paths)
+
         fold_fname = f"fold_{i}.npy"
         fold_path = os.path.join(save_dir, fold_fname)
-        np.save(fold_path, fold)
+        np.save(fold_path, fold_list)
 
 
 if __name__ == '__main__':
