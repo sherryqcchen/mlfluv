@@ -8,6 +8,7 @@ import random
 
 
 def normalize_per_channel(image):
+
     placeholder = np.zeros_like(image).astype(float)
     for band_id in range(image.shape[0]):
         band = image[band_id, :, :]
@@ -21,15 +22,18 @@ def normalize_per_channel(image):
 
 
 def rotate_90_degrees(image, mask):
+
     if random.random() > 0.8:
         image = np.rot90(image, axes=(1, 2))
         mask = np.rot90(mask)
-        print(f"rotated: {image.shape}")
+
     return image, mask
 
 
 def random_crop(image, mask, window=256):
+
     _, h, w = image.shape
+
     w_start = random.randint(0, w - window - 1)
     h_start = random.randint(0, h - window - 1)
     image = image[:, h_start:h_start + window, w_start:w_start + window]
@@ -39,8 +43,9 @@ def random_crop(image, mask, window=256):
 
 
 def random_mask(image, size=20, mask_prob=0.4): #prob 0.8, size 30 was not good in prediction, so change to prob 0.6, size 20
-    # 510, 580
+    
     _, h, w = image.shape
+
     placeholder = np.zeros_like(image).astype(np.float64)
     # for band_id in range(image.shape[-1]):
     for band_id in range(2,15):
@@ -55,14 +60,15 @@ def random_mask(image, size=20, mask_prob=0.4): #prob 0.8, size 30 was not good 
     return placeholder
 
 def center_crop(image, mask, window=192):
-    # 13 * 32 = 416
+   
     y, x = mask.shape
     startx = x // 2 - (window // 2)
     starty = y // 2 - (window // 2)
-    image = image[starty:starty + window, startx:startx + window, :]
+    image = image[:, starty:starty + window, startx:startx + window]
     mask = mask[starty:starty + window, startx:startx + window]
 
     return image, mask
+
 
 class MLFluvDataset(Dataset):
 
@@ -73,13 +79,14 @@ class MLFluvDataset(Dataset):
             norm = True,
             mode = 'train',
             folds = [0, 1, 2, 4],
-            label = 'hand',          
+            label = 'hand',
+            one_hot_encode = True          
     ):
         """
         Pytorch Dataset class to load samples from the MLFLuv dataset for fluvial system semantic segmentation.
 
         """   
-        print(os.listdir(data_path))
+        # print(os.listdir(data_path))
         self.file_paths = [os.path.join(data_path, file) for file in os.listdir(data_path)] # 5 npy files
         self.all_folds = [np.load(file) for file in self.file_paths] # len() is 5 because of 5 folds split
 
@@ -94,11 +101,15 @@ class MLFluvDataset(Dataset):
         self.mode = mode
         self.norm = norm
         self.label = label
+        self.one_hot_encode = one_hot_encode
+
+        if self.one_hot_encode:
+            self.label_values = [0, 1, 2, 3, 4, 5, 6, 7]
+            
 
     def transform(self, image, mask, rough_mask=None):
 
         bands, h, w = image.shape
-        print(f"before transform: {image.shape}")
 
         if self.mode == 'train':
             if random.random() > .7:
@@ -141,23 +152,35 @@ class MLFluvDataset(Dataset):
         auto_mask_arr = np.load(auto_mask).squeeze()[:512, :512]  
         hand_mask_arr = rioxarray.open_rasterio(hand_mask).data.squeeze()[:512, :512]
 
+        if self.label == 'hand':
+            mask = hand_mask_arr
+        else:
+            mask = auto_mask_arr
+
         # Train on S1 2 bands and S2 13 bands
         # clip each image to 512*512 as height * width
         image = np.dstack((s1_arr, s2_arr))[:512, :512, :]  # shape [h, w, band], band=15
         image = np.transpose(image, (2, 0, 1))  # shape [band, h, w], band=15
+        
         # Train only on Sen2 13 bands
         # image = s2_image
 
-        if self.label == 'hand':
-            image, mask = self.transform(image, hand_mask_arr) # image shape [windows_size, window_size, band], band=15
-        else:
-            image, mask = self.transform(image, auto_mask_arr)
+        image, mask = self.transform(image, mask) # image shape [windows_size, window_size, band], band=15
+
+        # one-hot-encode the mask
+        if self.one_hot_encode:
+            class_idx = [idx for idx in self.label_values]
+            masks = [(mask == idx) for idx in class_idx]
+            mask = np.stack(masks, axis = -1) # shape [h, w, band], band=8
+
+            mask = np.transpose(mask, (2, 0, 1)) # shape [band, h, w], band=8
 
         image = np.transpose(image, (2, 0, 1)) # shape [15, 256, 256]
+        # mask = np.transpose(mask, (2, 0, 1)) # shape [band, h, w], band=8
 
         image = torch.from_numpy(image).float()
-        mask = mask.astype(np.uint8)
-        mask = torch.from_numpy(mask.copy()).float()
+        mask = mask.astype("float")
+        mask = torch.from_numpy(mask.copy()).long()
 
         return image, mask
     
@@ -175,4 +198,4 @@ if __name__ == '__main__':
     for idx, (image, label) in enumerate(my_dataset):
         # print(idx)
         print(image.shape)
-        print(label.shape)
+        print(label.dtype)
