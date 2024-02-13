@@ -157,6 +157,9 @@ class MLFluvDataset(Dataset):
         else:
             mask = auto_mask_arr
 
+        # mask no data label as clouds (the class that has not shown in the dataset yet)
+        mask = np.where(mask == -999, 7, mask)    
+
         # Train on S1 2 bands and S2 13 bands
         # clip each image to 512*512 as height * width
         image = np.dstack((s1_arr, s2_arr))[:512, :512, :]  # shape [h, w, band], band=15
