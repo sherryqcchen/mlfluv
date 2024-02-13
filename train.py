@@ -4,6 +4,7 @@ from loguru import logger
 import matplotlib.pyplot as plt
 import os
 import shutil
+import sklearn
 # from torchmetrics.functional import accuracy, precision, recall, f1_score, jaccard_index  # , iou
 from torchmetrics import Accuracy, ConfusionMatrix, Precision, Recall, JaccardIndex, F1Score
 import segmentation_models_pytorch as smp
@@ -59,7 +60,7 @@ if __name__ == "__main__":
     ENCODER_WEIGHTS = None
     ACTIVATION = 'softmax2d'# None  # could be None for logits (binary) or 'softmax2d' for multicalss segmentation
 
-    device = torch.device(device if torch.cuda.is_available() else "cpu")
+    device = 'cpu'#torch.device(device if torch.cuda.is_available() else "cpu")
 
     model = smp.Unet(encoder_name=ENCODER,
                      encoder_weights=ENCODER_WEIGHTS,
@@ -76,7 +77,7 @@ if __name__ == "__main__":
         folds = [0, 1, 2, 3],
         window=256,
         label='hand',
-        one_hot_encode=True
+        one_hot_encode=False
     )
 
     val_set = MLFluvDataset(
@@ -85,7 +86,7 @@ if __name__ == "__main__":
         folds = [4],
         window=256, 
         label='hand',
-        one_hot_encode=True
+        one_hot_encode=False
     )
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True) # , num_workers=2) # TODO: remove num_workers when debugging
@@ -94,11 +95,29 @@ if __name__ == "__main__":
     # SET LOSS, OPTIMIZER
     # weights = torch.tensor([1., 20., 160.]).to(device)
     # weights = torch.tensor([1., 5, 15.]).to(device)
+    # TODO get weights based on the pixel count of each class in train set 
+    labels = []
+    for _, label in train_set:
+        # print(label.shape)
+        labels.append(label)
+    train_labels = np.stack(labels, axis=0).flatten()
+    print(train_labels.shape)
+    classes = np.unique(train_labels)
+    print(classes)
+    
+    class_weights = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=train_labels)
+    print(class_weights)
+
+    weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
+
+
+
     # criterion = nn.BCEWithLogitsLoss(reduction='sum')  # changed from nn.BCELoss
-    criterion = nn.CrossEntropyLoss(reduction='sum',
-                                    # weight=weights,
-                                    label_smoothing=0.25)
-    # criterion = smp.losses.DiceLoss(mode='multiclass')
+    # TODO change reduction to 'none' causing error, find out which one I should use
+    # criterion = nn.CrossEntropyLoss(reduction='sum',
+    #                                 # weight=weights,
+    #                                 label_smoothing=0.25)
+    criterion = smp.losses.DiceLoss(mode='multiclass')
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     history = {
@@ -117,51 +136,6 @@ if __name__ == "__main__":
         'val_cm': [],
         'val_iou': [],
     }
-
-    # metrics = [
-    #     utils.metrics.IoU(threshold= 0.5),
-    #     utils.metrics.Fscore(threshold= 0.5),
-    #     utils.metrics.Accuracy(threshold= 0.5),
-    #     utils.metrics.Recall(threshold    = 0.5),
-    #     utils.metrics.Precision(threshold = 0.5),
-    # ]
-
-    # train_epoch = utils.train.TrainEpoch(
-    # model, 
-    # loss=criterion, 
-    # metrics=metrics, 
-    # optimizer=optimizer,
-    # device=device
-    # )
-
-    # valid_epoch = smp.utils.train.ValidEpoch(
-    # model, 
-    # loss=criterion, 
-    # metrics=metrics, 
-    # device=device
-    # )
-
-    # patience = 5
-
-    # max_score = 0
-
-    # for i in range(50):
-    #     print(f"Epoch:{i+1}")
-    #     train_logs = train_epoch.run(train_loader)
-    #     valid_logs = valid_epoch.run(val_loader)
-
-    #     if max_score < valid_logs["iou_score"]:
-    #         max_score = valid_logs["iou_score"]
-    #         torch.save(model, "./best_model.pth")
-    #         print("Model saved!")
-    #         early_stop_counter = 0
-        
-    #     else:
-    #         early_stop_counter += 1
-    #         print(f"not improve for {early_stop_counter}Epoch")
-    #         if early_stop_counter==patience:
-    #             print(f"early stop. Max Score {max_score}")
-    #             break
 
     best_val_miou = 0
     best_val_epoch = 0
@@ -200,8 +174,10 @@ if __name__ == "__main__":
             # y_pred = torch.argmax(y_pred, dim =1).float()
 
             # y_pred_prob = torch.sigmoid(y_pred)
-
-            loss = criterion(y_pred, y_batch.argmax(dim=1))
+            
+            # TODO the following line works for one_hot_encode=True 
+            # loss = criterion(y_pred, y_batch.argmax(dim=1))
+            loss = criterion(y_pred, y_batch)
             
 
             # y_pred_prob = torch.sigmoid(y_pred) # sigmoid for binary segmentation: https://glassboxmedicine.com/2019/05/26/classification-sigmoid-vs-softmax/
@@ -216,13 +192,6 @@ if __name__ == "__main__":
 
             loss.backward()
             optimizer.step()
-
-        # history['train_loss'].append(train_loss / len(train_loader))
-        # history['train_acc'].append(train_acc.cpu().numpy() / len(train_loader))
-        # history['train_recall'].append(train_recall.cpu().numpy() / len(train_loader))
-        # history['train_precision'].append(train_precision.cpu().numpy() / len(train_loader))
-        # history['train_f1'].append(train_f1.cpu().numpy() / len(train_loader))
-        # history['train_iou'].append(train_iou.cpu().numpy() / len(train_loader))
 
         train_acc = acc_metric.compute()
         train_precision = precision_metric.compute()
@@ -266,8 +235,8 @@ if __name__ == "__main__":
             # y_val_pred_np = (torch.argmax(y_val_pred, dim=1).cpu().numpy()[0, :, :]) * 120
             # cv2.imwrite(os.path.join(f'./experiments/{log_num}/val_{i}.png'), y_val_pred_np.astype(np.uint8))
 
-            loss = criterion(y_val_pred, y_batch.float())
-            y_val_pred_prob = torch.sigmoid(y_val_pred)
+            loss = criterion(y_val_pred, y_batch)
+            # y_val_pred_prob = torch.sigmoid(y_val_pred)
             val_loss += loss.item()
 
             val_acc = acc_metric(y_val_pred_prob, y_batch.long())
@@ -289,13 +258,6 @@ if __name__ == "__main__":
             best_val_epoch = epoch
             torch.save(model.state_dict(), f'./experiments/{log_num}/checkpoints/best_model.pth')
             logger.info(f'\n\nSaved new model at epoch {epoch}!\n\n')
-
-        # history['val_loss'].append(val_loss / len(val_loader))
-        # history['val_acc'].append(val_acc.cpu().numpy() / len(val_loader))
-        # history['val_recall'].append(val_recall.cpu().numpy() / len(val_loader))
-        # history['val_precision'].append(val_precision.cpu().numpy() / len(val_loader))
-        # history['val_f1'].append(val_f1.cpu().numpy() / len(val_loader))
-        # history['val_iou'].append(val_iou.cpu().numpy() / len(val_loader))
 
         logger.info(f"EPOCH: {epoch} (validation)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set)}")
