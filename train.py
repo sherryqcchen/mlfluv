@@ -92,32 +92,59 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True) # , num_workers=2) # TODO: remove num_workers when debugging
     val_loader = DataLoader(val_set, batch_size=1) #, num_workers=2) # TODO: remove num_workers when debugging
 
-    # SET LOSS, OPTIMIZER
-    # weights = torch.tensor([1., 20., 160.]).to(device)
-    # weights = torch.tensor([1., 5, 15.]).to(device)
+
     # TODO get weights based on the pixel count of each class in train set 
-    labels = []
-    for _, label in train_set:
-        # print(label.shape)
-        labels.append(label)
-    train_labels = np.stack(labels, axis=0).flatten()
-    print(train_labels.shape)
-    classes = np.unique(train_labels)
-    print(classes)
+    # https://medium.com/gumgum-tech/handling-class-imbalance-by-introducing-sample-weighting-in-the-loss-function-3bdebd8203b4
     
-    class_weights = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=train_labels)
+    def get_class_weight(dataset, weight_func='inverse_log'):
+        labels = [label for _, label in dataset]
+
+        train_labels = np.stack(labels, axis=0).flatten()
+        # print(train_labels.shape)
+        pixel_sum = train_labels.shape[0]
+        classes, frequencies = np.unique(train_labels, return_counts=True)
+        class_percent = frequencies / pixel_sum
+        # print(classes)
+        # print(frequencies)
+        # print(np.bincount(train_labels))
+
+        if weight_func == 'inverse_log':
+            # weight = 1 / np.log(class_percent)
+            weight = pixel_sum / (len(classes) * np.log(frequencies.astype(np.float64)))
+        elif weight_func == 'inverse_count': 
+            weight = pixel_sum / (len(classes) * frequencies.astype(np.float64))
+        elif weight_func == 'inverse_sqrt':
+            weight = pixel_sum / (len(classes) * np.sqrt(class_percent.astype(np.float64)))
+        else: 
+            print('No weight function is given. We use sklearn compute class weight function')
+            # weight = np.ones(classes.shape[0], dtype=np.float64)
+            weight = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=train_labels)
+
+        # the weight for class 7 (clouds and no data) is not needed, so it should be zero out
+        if 7 in classes:
+            weight[-1] = 0
+
+        return weight
+
+    # weights = get_class_weight(train_set, weight_func='inverse_log')
+    # print(weights)
+    # weights_count = get_class_weight(train_set, weight_func='inverse_count')
+    # print(weights_count)
+    
+    class_weights = get_class_weight(train_set, weight_func='sklearn')
     print(class_weights)
 
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 
-
+    
+    # SET LOSS, OPTIMIZER
 
     # criterion = nn.BCEWithLogitsLoss(reduction='sum')  # changed from nn.BCELoss
     # TODO change reduction to 'none' causing error, find out which one I should use
-    # criterion = nn.CrossEntropyLoss(reduction='sum',
-    #                                 # weight=weights,
-    #                                 label_smoothing=0.25)
-    criterion = smp.losses.DiceLoss(mode='multiclass')
+    criterion = nn.CrossEntropyLoss(reduction='sum',
+                                    weight=weights,
+                                    label_smoothing=0.25)
+    # criterion = smp.losses.DiceLoss(mode='multiclass')
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     history = {
@@ -176,8 +203,8 @@ if __name__ == "__main__":
             # y_pred_prob = torch.sigmoid(y_pred)
             
             # TODO the following line works for one_hot_encode=True 
-            # loss = criterion(y_pred, y_batch.argmax(dim=1))
-            loss = criterion(y_pred, y_batch)
+            loss = criterion(y_pred, y_batch.argmax(dim=1))
+            # loss = criterion(y_pred, y_batch)
             
 
             # y_pred_prob = torch.sigmoid(y_pred) # sigmoid for binary segmentation: https://glassboxmedicine.com/2019/05/26/classification-sigmoid-vs-softmax/
