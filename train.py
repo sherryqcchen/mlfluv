@@ -5,15 +5,14 @@ import matplotlib.pyplot as plt
 import os
 import shutil
 import sklearn
-# from torchmetrics.functional import accuracy, precision, recall, f1_score, jaccard_index  # , iou
-from torchmetrics import Accuracy, ConfusionMatrix, Precision, Recall, JaccardIndex, F1Score
 import segmentation_models_pytorch as smp
-import segmentation_models_pytorch.utils as utils
 import torch
+
 import torch.optim as optim
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
+# from stream_metrics import StreamSegMetrics
 
 from dataset import MLFluvDataset
 
@@ -93,20 +92,18 @@ if __name__ == "__main__":
     val_loader = DataLoader(val_set, batch_size=1) #, num_workers=2) # TODO: remove num_workers when debugging
 
 
-    # TODO get weights based on the pixel count of each class in train set 
-    # https://medium.com/gumgum-tech/handling-class-imbalance-by-introducing-sample-weighting-in-the-loss-function-3bdebd8203b4
+
     
     def get_class_weight(dataset, weight_func='inverse_log'):
+        # get weights based on the pixel count of each class in train set 
+        # https://medium.com/gumgum-tech/handling-class-imbalance-by-introducing-sample-weighting-in-the-loss-function-3bdebd8203b4
         labels = [label for _, label in dataset]
 
         train_labels = np.stack(labels, axis=0).flatten()
-        # print(train_labels.shape)
+
         pixel_sum = train_labels.shape[0]
         classes, frequencies = np.unique(train_labels, return_counts=True)
         class_percent = frequencies / pixel_sum
-        # print(classes)
-        # print(frequencies)
-        # print(np.bincount(train_labels))
 
         if weight_func == 'inverse_log':
             # weight = 1 / np.log(class_percent)
@@ -125,23 +122,15 @@ if __name__ == "__main__":
             weight[-1] = 0
 
         return weight
-
-    # weights = get_class_weight(train_set, weight_func='inverse_log')
-    # print(weights)
-    # weights_count = get_class_weight(train_set, weight_func='inverse_count')
-    # print(weights_count)
     
     class_weights = get_class_weight(train_set, weight_func='sklearn')
     print(class_weights)
 
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
-
     
     # SET LOSS, OPTIMIZER
-
-    # criterion = nn.BCEWithLogitsLoss(reduction='sum')  # changed from nn.BCELoss
     # TODO change reduction to 'none' causing error, find out which one I should use
-    criterion = nn.CrossEntropyLoss(reduction='sum',
+    criterion = nn.CrossEntropyLoss(reduction='mean',
                                     weight=weights,
                                     label_smoothing=0.25)
     # criterion = smp.losses.DiceLoss(mode='multiclass')
@@ -166,16 +155,10 @@ if __name__ == "__main__":
 
     best_val_miou = 0
     best_val_epoch = 0
+    
 
-    acc_metric = Accuracy(task='multiclass', num_classes=num_classes).to(device)
-    precision_metric = Precision(task="multiclass", num_classes=num_classes).to(device)
-    recall_metric = Recall(task='multiclass', num_classes=num_classes).to(device)
-    f1_metric = F1Score(task='multiclass', num_classes=num_classes).to(device)
-    cm_metric = ConfusionMatrix(task='multiclass', num_classes=num_classes).to(device)
-    iou_metric = JaccardIndex(task='multiclass', num_classes=num_classes).to(device)
-
-
-
+    # metric = StreamSegMetrics(num_classes)
+    
     for epoch in range(1, epochs + 1):
 
         model.train()
@@ -188,62 +171,47 @@ if __name__ == "__main__":
         train_iou = 0
         train_cm = 0
 
-        for X_batch, y_batch in train_loader:
+        for batch_idx, (X_batch, y_batch) in enumerate(train_loader):
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
         
             optimizer.zero_grad()
 
             y_pred = model(X_batch)
 
-
-            # Convert with argmac to shape the output n_classes layers to only one layer.
-            # https://github.com/qubvel/segmentation_models.pytorch/issues/541
-            # y_pred = torch.argmax(y_pred, dim =1).float()
-
-            # y_pred_prob = torch.sigmoid(y_pred)
-            
-            # TODO the following line works for one_hot_encode=True 
-            loss = criterion(y_pred, y_batch.argmax(dim=1))
-            # loss = criterion(y_pred, y_batch)
-            
-
-            # y_pred_prob = torch.sigmoid(y_pred) # sigmoid for binary segmentation: https://glassboxmedicine.com/2019/05/26/classification-sigmoid-vs-softmax/
+            loss = criterion(y_pred, y_batch)
             train_loss += loss.item()
 
-            train_acc = acc_metric(y_pred, y_batch)
-            train_precision = precision_metric(y_pred, y_batch)
-            train_recall = recall_metric(y_pred, y_batch)
-            train_cm = cm_metric(y_pred, y_batch)
-            train_iou = iou_metric(y_pred, y_batch)
-            train_f1 = f1_metric(y_pred, y_batch)
+            # Convert with argmax to reshape the output n_classes layers to only one layer.
+            y_pred = y_pred.argmax(dim=1) 
+
+            tp, fp, fn, tn = smp.metrics.get_stats(y_pred, y_batch, mode='multiclass', num_classes=num_classes)
+            # compute metric
+            train_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
+            train_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro")
+            train_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro")
+            train_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="micro")
+            train_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
+            train_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
+
+            # metric.update(y_batch.cpu().numpy(), y_pred.cpu().numpy())
+            # metrics_out = metric.get_results()
+            # print(metrics_out)
 
             loss.backward()
             optimizer.step()
-
-        train_acc = acc_metric.compute()
-        train_precision = precision_metric.compute()
-        train_recall = recall_metric.compute()
-        train_cm = cm_metric.compute()
-        train_iou = iou_metric.compute()
-        train_f1 = f1_metric.compute()
-
+        
         logger.info(f"EPOCH: {epoch} (training)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {train_loss / len(train_set):.3f}")
-        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(train_acc.item(), 3)}")
+        logger.info(f"{'':<10}Micro (image-wise) IOU{'':<1} ----> {round(train_micro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Macro (image-wise) IOU{'':<1} ----> {round(train_macro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(train_accuracy.item(), 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(train_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(train_precision.item(), 3)}")
         logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
-        logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(train_iou.item(), 3)}")
-        logger.info(f"{'':<10}Confusion Matrix{'':<1}\n{train_cm}")
+        # logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(train_iou.item(), 3)}")
+        # logger.info(f"{'':<10}Confusion Matrix{'':<1}\n{train_cm}")
 
-        # if epoch % 5 == 0:  # if the number of epoch is divided by 5 do the validation
-
-        acc_metric.reset()
-        precision_metric.reset()
-        recall_metric.reset()
-        cm_metric.reset()
-        iou_metric.reset()
-        f1_metric.reset()
+       
 
         model.eval()
 
@@ -263,44 +231,39 @@ if __name__ == "__main__":
             # cv2.imwrite(os.path.join(f'./experiments/{log_num}/val_{i}.png'), y_val_pred_np.astype(np.uint8))
 
             loss = criterion(y_val_pred, y_batch)
-            # y_val_pred_prob = torch.sigmoid(y_val_pred)
             val_loss += loss.item()
+            # Convert with argmax to reshape the output n_classes layers to only one layer.
+            y_val_pred = y_val_pred.argmax(dim=1) 
 
-            val_acc = acc_metric(y_val_pred_prob, y_batch.long())
-            val_precision = precision_metric(y_val_pred_prob, y_batch.long())
-            val_recall = recall_metric(y_val_pred_prob, y_batch.long())
-            val_cm = cm_metric(y_val_pred_prob, y_batch.long())
-            val_iou = iou_metric(y_val_pred_prob, y_batch.long())
-            val_f1 = f1_metric(y_val_pred_prob, y_batch.long())
+            # metric.update(y_batch.cpu().numpy(), y_val_pred.cpu().numpy())
+            # metrics_out = metric.get_results()
+            # print(metrics_out)
 
-        val_acc = acc_metric.compute()
-        val_precision = precision_metric.compute()
-        val_recall = recall_metric.compute()
-        val_cm = cm_metric.compute()
-        val_iou = iou_metric.compute()
-        val_f1 = f1_metric.compute()
+            tp, fp, fn, tn = smp.metrics.get_stats(y_val_pred, y_batch, mode='multiclass', num_classes=num_classes)
+            # compute metric
+            val_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
+            val_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro")
+            val_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro")
+            val_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="micro")
+            val_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
+            val_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")        
 
-        if val_f1.item() >= best_val_miou:
-            best_val_miou = val_f1.item()
+        if val_macro_iou.item() >= best_val_miou:
+            best_val_miou = val_macro_iou.item()
             best_val_epoch = epoch
             torch.save(model.state_dict(), f'./experiments/{log_num}/checkpoints/best_model.pth')
             logger.info(f'\n\nSaved new model at epoch {epoch}!\n\n')
 
-        logger.info(f"EPOCH: {epoch} (validation)")
-        logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set)}")
-        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(val_acc.item(), 3)}")
+        logger.info(f"EPOCH: {epoch} (validating)")
+        logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set):.3f}")
+        logger.info(f"{'':<10}Micro (image-wise) IOU{'':<1} ----> {round(val_micro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Macro (image-wise) IOU{'':<1} ----> {round(val_macro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(val_accuracy.item(), 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(val_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(val_precision.item(), 3)}")
-        logger.info(f"{'':<10}F1{'':<1} ----> {round(val_f1.item(), 3)}")
-        logger.info(f"{'':<10}IOU{'':<1} ----> {round(val_iou.item(), 3)}")
-        logger.info(f"{'':<10}Confusion Matrix{'':<1}\n{val_cm}")
+        logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
+        # logger.info(f"{'':<10}Confusion Matrix{'':<1}\n{val_cm}")
 
-        acc_metric.reset()
-        precision_metric.reset()
-        recall_metric.reset()
-        cm_metric.reset()
-        iou_metric.reset()
-        f1_metric.reset()
 
-    logger.info(f'Best Flood IoU: {best_val_miou} at epoch {best_val_epoch}')
+    logger.info(f'Best micro IoU: {best_val_miou} at epoch {best_val_epoch}')
 
