@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
         return weight
     
-    class_weights = get_class_weight(train_set, weight_func='sklearn')
+    class_weights = get_class_weight(train_set, weight_func='inverse_log')
     print(class_weights)
 
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
@@ -202,8 +202,8 @@ if __name__ == "__main__":
         
         logger.info(f"EPOCH: {epoch} (training)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {train_loss / len(train_set):.3f}")
-        logger.info(f"{'':<10}Micro (image-wise) IOU{'':<1} ----> {round(train_micro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Macro (image-wise) IOU{'':<1} ----> {round(train_macro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(train_micro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(train_macro_iou.item(), 3)}")
         logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(train_accuracy.item(), 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(train_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(train_precision.item(), 3)}")
@@ -248,16 +248,16 @@ if __name__ == "__main__":
             val_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
             val_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")        
 
-        if val_macro_iou.item() >= best_val_miou:
-            best_val_miou = val_macro_iou.item()
+        if val_micro_iou.item() >= best_val_miou:
+            best_val_miou = val_micro_iou.item()
             best_val_epoch = epoch
             torch.save(model.state_dict(), f'./experiments/{log_num}/checkpoints/best_model.pth')
             logger.info(f'\n\nSaved new model at epoch {epoch}!\n\n')
 
         logger.info(f"EPOCH: {epoch} (validating)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set):.3f}")
-        logger.info(f"{'':<10}Micro (image-wise) IOU{'':<1} ----> {round(val_micro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Macro (image-wise) IOU{'':<1} ----> {round(val_macro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(val_micro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(val_macro_iou.item(), 3)}")
         logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(val_accuracy.item(), 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(val_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(val_precision.item(), 3)}")
