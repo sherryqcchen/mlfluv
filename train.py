@@ -1,19 +1,19 @@
+import time
 import cv2
-import json
-from loguru import logger
-import matplotlib.pyplot as plt
 import os
 import shutil
 import sklearn
-import segmentation_models_pytorch as smp
+import json
+import numpy as np
+from loguru import logger
+import matplotlib.pyplot as plt
 import torch
-
 import torch.optim as optim
 import torch.nn as nn
 from torch.utils.data import DataLoader
-import numpy as np
-# from stream_metrics import StreamSegMetrics
-
+from torch.utils.tensorboard import SummaryWriter
+import segmentation_models_pytorch as smp
+from miou import IoU
 from dataset import MLFluvDataset
 
 
@@ -21,6 +21,38 @@ def parse_config_params(config_file):
     with open(config_file, 'r') as f:
         config_params = json.load(f)
     return config_params
+
+def get_class_weight(dataset, weight_func='inverse_log'):
+        # get weights based on the pixel count of each class in train set 
+        # calculation refer to a post: 
+        # https://medium.com/gumgum-tech/handling-class-imbalance-by-introducing-sample-weighting-in-the-loss-function-3bdebd8203b4
+        labels = [label for _, label in dataset]
+
+        train_labels = np.stack(labels, axis=0).flatten()
+
+        pixel_sum = train_labels.shape[0]
+        classes, frequencies = np.unique(train_labels, return_counts=True)
+        class_percent = frequencies / pixel_sum
+
+        if weight_func == 'inverse_log':
+            # weight = 1 / np.log(class_percent)
+            weight = pixel_sum / (len(classes) * np.log(frequencies.astype(np.float64)))
+        elif weight_func == 'inverse_log_percent':
+             weight = 1 / np.log(class_percent.astype(np.float64))
+        elif weight_func == 'inverse_count': 
+            weight = pixel_sum / (len(classes) * frequencies.astype(np.float64))
+        elif weight_func == 'inverse_sqrt':
+            weight = pixel_sum / (len(classes) * np.sqrt(class_percent.astype(np.float64)))
+        else: 
+            print('No weight function is given. We use sklearn compute class weight function')
+            # weight = np.ones(classes.shape[0], dtype=np.float64)
+            weight = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=train_labels)
+
+        # the weight for class 7 (clouds and no data) is not needed, so it should be zero out
+        if 7 in classes:
+            weight[-1] = 0
+
+        return weight
 
 
 if __name__ == "__main__":
@@ -39,7 +71,7 @@ if __name__ == "__main__":
     lr = config_params["trainer"]["learning_rate"]
     batch_size = config_params["trainer"]["batch_size"]
 
-# LOGGING
+    # LOGGING
 
     logger.add(f'experiments/{config_params["trainer"]["log_num"]}/info.log')
     # writer = SummaryWriter(f'./experiments/{log_num}/tensorboard')
@@ -90,50 +122,23 @@ if __name__ == "__main__":
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True) # , num_workers=2) # TODO: remove num_workers when debugging
     val_loader = DataLoader(val_set, batch_size=1) #, num_workers=2) # TODO: remove num_workers when debugging
-
-
-
-    
-    def get_class_weight(dataset, weight_func='inverse_log'):
-        # get weights based on the pixel count of each class in train set 
-        # https://medium.com/gumgum-tech/handling-class-imbalance-by-introducing-sample-weighting-in-the-loss-function-3bdebd8203b4
-        labels = [label for _, label in dataset]
-
-        train_labels = np.stack(labels, axis=0).flatten()
-
-        pixel_sum = train_labels.shape[0]
-        classes, frequencies = np.unique(train_labels, return_counts=True)
-        class_percent = frequencies / pixel_sum
-
-        if weight_func == 'inverse_log':
-            # weight = 1 / np.log(class_percent)
-            weight = pixel_sum / (len(classes) * np.log(frequencies.astype(np.float64)))
-        elif weight_func == 'inverse_count': 
-            weight = pixel_sum / (len(classes) * frequencies.astype(np.float64))
-        elif weight_func == 'inverse_sqrt':
-            weight = pixel_sum / (len(classes) * np.sqrt(class_percent.astype(np.float64)))
-        else: 
-            print('No weight function is given. We use sklearn compute class weight function')
-            # weight = np.ones(classes.shape[0], dtype=np.float64)
-            weight = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=train_labels)
-
-        # the weight for class 7 (clouds and no data) is not needed, so it should be zero out
-        if 7 in classes:
-            weight[-1] = 0
-
-        return weight
     
     class_weights = get_class_weight(train_set, weight_func='inverse_log')
     print(class_weights)
 
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
+    # TODO: add weights to the water and sediment classes
     
     # SET LOSS, OPTIMIZER
     # TODO change reduction to 'none' causing error, find out which one I should use
     criterion = nn.CrossEntropyLoss(reduction='mean',
                                     weight=weights,
-                                    label_smoothing=0.25)
+                                    label_smoothing=0.01)
     # criterion = smp.losses.DiceLoss(mode='multiclass')
+
+    # TODO: also try focal loss, dice loss function
+    # TODO: calculate mean IoU and class IoU
+    
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     history = {
@@ -155,13 +160,11 @@ if __name__ == "__main__":
 
     best_val_miou = 0
     best_val_epoch = 0
-    
 
-    # metric = StreamSegMetrics(num_classes)
+    losses_train = []
+    losses_val = []
     
-    for epoch in range(1, epochs + 1):
-
-        model.train()
+    for epoch in range(1, epochs + 1):     
 
         train_loss = 0  # summation of loss for every batch
         train_acc = 0  # summation of accuracy for every batch
@@ -170,6 +173,12 @@ if __name__ == "__main__":
         train_f1 = 0
         train_iou = 0
         train_cm = 0
+
+        iou_meter = IoU(num_classes=num_classes, cm_device=device)
+
+        t_start = time.time()
+
+        model.train()
 
         for batch_idx, (X_batch, y_batch) in enumerate(train_loader):
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
@@ -193,25 +202,25 @@ if __name__ == "__main__":
             train_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
             train_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
 
-            # metric.update(y_batch.cpu().numpy(), y_pred.cpu().numpy())
-            # metrics_out = metric.get_results()
-            # print(metrics_out)
+            train_miou, train_acc = iou_meter.get_miou_acc()
 
             loss.backward()
             optimizer.step()
         
+        t_end = time.time()
+        total_time = t_end - t_start
+        print("Epoch time : {:.1f}s".format(total_time))
+
+        losses_train.append(train_loss / len(train_set))
+
         logger.info(f"EPOCH: {epoch} (training)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {train_loss / len(train_set):.3f}")
-        logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(train_micro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(train_macro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(train_accuracy.item(), 3)}")
+        logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(train_miou, 3)}")
+        logger.info(f"{'':<10}Micro IoU{'':<1} ----> {round(train_micro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Macro IoU{'':<1} ----> {round(train_macro_iou.item(), 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(train_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(train_precision.item(), 3)}")
         logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
-        # logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(train_iou.item(), 3)}")
-        # logger.info(f"{'':<10}Confusion Matrix{'':<1}\n{train_cm}")
-
-       
 
         model.eval()
 
@@ -235,10 +244,6 @@ if __name__ == "__main__":
             # Convert with argmax to reshape the output n_classes layers to only one layer.
             y_val_pred = y_val_pred.argmax(dim=1) 
 
-            # metric.update(y_batch.cpu().numpy(), y_val_pred.cpu().numpy())
-            # metrics_out = metric.get_results()
-            # print(metrics_out)
-
             tp, fp, fn, tn = smp.metrics.get_stats(y_val_pred, y_batch, mode='multiclass', num_classes=num_classes)
             # compute metric
             val_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
@@ -248,22 +253,35 @@ if __name__ == "__main__":
             val_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
             val_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")        
 
+            val_miou, val_acc = iou_meter.get_miou_acc()
+
         if val_micro_iou.item() >= best_val_miou:
             best_val_miou = val_micro_iou.item()
             best_val_epoch = epoch
             torch.save(model.state_dict(), f'./experiments/{log_num}/checkpoints/best_model.pth')
             logger.info(f'\n\nSaved new model at epoch {epoch}!\n\n')
 
+        losses_val.append(val_loss / len(val_set))
+
         logger.info(f"EPOCH: {epoch} (validating)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set):.3f}")
+        logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(val_miou, 3)}")
         logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(val_micro_iou.item(), 3)}")
         logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(val_macro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(val_accuracy.item(), 3)}")
+        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(val_acc, 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(val_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(val_precision.item(), 3)}")
         logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
-        # logger.info(f"{'':<10}Confusion Matrix{'':<1}\n{val_cm}")
-
 
     logger.info(f'Best micro IoU: {best_val_miou} at epoch {best_val_epoch}')
+
+    # Plot train and validation accuracy graph
+    plt.figure(figsize=(10,5))
+    plt.title("Train and validation loss")
+    plt.plot(losses_train, label="train")
+    plt.plt(losses_val, label="val")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.show()
 
