@@ -11,9 +11,9 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from torchmetrics import JaccardIndex
 from torch.utils.tensorboard import SummaryWriter
 import segmentation_models_pytorch as smp
-from miou import IoU
 from dataset import MLFluvDataset
 
 
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     ENCODER_WEIGHTS = None
     ACTIVATION = 'softmax2d'# None  # could be None for logits (binary) or 'softmax2d' for multicalss segmentation
 
-    device = 'cpu'#torch.device(device if torch.cuda.is_available() else "cpu")
+    device = torch.device(device if torch.cuda.is_available() else "cpu")
 
     model = smp.Unet(encoder_name=ENCODER,
                      encoder_weights=ENCODER_WEIGHTS,
@@ -120,8 +120,8 @@ if __name__ == "__main__":
         one_hot_encode=False
     )
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True) # , num_workers=2) # TODO: remove num_workers when debugging
-    val_loader = DataLoader(val_set, batch_size=1) #, num_workers=2) # TODO: remove num_workers when debugging
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)#, num_workers=2) # TODO: remove num_workers when debugging
+    val_loader = DataLoader(val_set, batch_size=1)#, num_workers=2) # TODO: remove num_workers when debugging
     
     class_weights = get_class_weight(train_set, weight_func='inverse_log')
     print(class_weights)
@@ -165,8 +165,8 @@ if __name__ == "__main__":
     losses_val = []
 
     # Track model running progress in tensorboard
-    # logdir = './'
-    writer = SummaryWriter()
+
+    writer = SummaryWriter()    
 
     for epoch in range(1, epochs + 1):     
 
@@ -178,7 +178,8 @@ if __name__ == "__main__":
         train_iou = 0
         train_cm = 0
 
-        iou_meter = IoU(num_classes=num_classes, cm_device=device)
+        train_jaccard_index = JaccardIndex(task='multiclass', num_classes=num_classes, ignore_index=7, average='none').to(device)
+        val_jaccard_index = JaccardIndex(task='multiclass', num_classes=num_classes, ignore_index=7, average='none').to(device)
 
         t_start = time.time()
 
@@ -206,7 +207,7 @@ if __name__ == "__main__":
             train_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
             train_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
 
-            # train_miou, train_acc = iou_meter.get_miou_acc()
+            train_jaccard_index.update(y_pred, y_batch)
 
             loss.backward()
             optimizer.step()
@@ -218,14 +219,27 @@ if __name__ == "__main__":
         losses_train.append(train_loss / len(train_set))
         writer.add_scalar('Loss/train', train_loss / len(train_set), epoch)
 
+        train_ious = train_jaccard_index.compute()
+
+        # Compute class-wise IoU from the Jaccard Index
+        class_wise_iou_train = []
+        for class_idx in range(num_classes):
+            class_iou = train_ious[class_idx]
+            class_wise_iou_train.append(class_iou.item())
+        
+        # Compute mean IoU across all classes
+        train_miou = sum(class_wise_iou_train) / len(class_wise_iou_train)
+
         logger.info(f"EPOCH: {epoch} (training)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {train_loss / len(train_set):.3f}")
-        # logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(train_miou, 3)}")
+        logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(train_miou, 3)}")
         logger.info(f"{'':<10}Micro IoU{'':<1} ----> {round(train_micro_iou.item(), 3)}")
         logger.info(f"{'':<10}Macro IoU{'':<1} ----> {round(train_macro_iou.item(), 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(train_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(train_precision.item(), 3)}")
         logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
+
+        train_jaccard_index.reset()
 
         model.eval()
 
@@ -236,7 +250,7 @@ if __name__ == "__main__":
         val_f1 = 0
         val_iou = 0
         val_cm = 0
-
+        
         for X_batch, y_batch in val_loader:
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)  # send values to device (GPU)
             y_val_pred = model(X_batch)
@@ -258,7 +272,7 @@ if __name__ == "__main__":
             val_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
             val_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")        
 
-            # val_miou, val_acc = iou_meter.get_miou_acc()
+            val_jaccard_index.update(y_val_pred, y_batch)
 
         if val_macro_iou.item() >= best_val_miou:
             best_val_miou = val_macro_iou.item()
@@ -269,27 +283,29 @@ if __name__ == "__main__":
         losses_val.append(val_loss / len(val_set))
         writer.add_scalar('Loss/val', val_loss / len(val_set), epoch)
 
+        val_ious = val_jaccard_index.compute()
+
+                # Compute class-wise IoU from the Jaccard Index
+        class_wise_iou_val = []
+        for class_idx in range(num_classes):
+            class_iou = val_ious[class_idx]
+            class_wise_iou_val.append(class_iou.item())
+        
+        # Compute mean IoU across all classes
+        val_miou = sum(class_wise_iou_val) / len(class_wise_iou_val)
+
         logger.info(f"EPOCH: {epoch} (validating)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set):.3f}")
-        # logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(val_miou, 3)}")
+        logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(val_miou, 3)}")
         logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(val_micro_iou.item(), 3)}")
         logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(val_macro_iou.item(), 3)}")
-        # logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(val_acc, 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(val_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(val_precision.item(), 3)}")
         logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
 
+        val_jaccard_index.reset()
+
     logger.info(f'Best micro IoU: {best_val_miou} at epoch {best_val_epoch}')
     
     writer.close()
-
-    # Plot train and validation loss graph
-    plt.figure(figsize=(10,5))
-    plt.title("Train and validation loss")
-    plt.plot(losses_train, label="train")
-    plt.plt(losses_val, label="val")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.legend()
-    plt.savefig('loss_per_epoch.png')
 
