@@ -13,6 +13,12 @@ basins/
 # Ignore the cloned repository
 gee_s1_ard/
 
+# Ignore the tensorboard tracking files
+runs/
+
+# Ignore model experiments
+experiments/
+
 # Ignore log files
 *.log
 

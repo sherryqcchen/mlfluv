@@ -163,7 +163,11 @@ if __name__ == "__main__":
 
     losses_train = []
     losses_val = []
-    
+
+    # Track model running progress in tensorboard
+    # logdir = './'
+    writer = SummaryWriter()
+
     for epoch in range(1, epochs + 1):     
 
         train_loss = 0  # summation of loss for every batch
@@ -202,7 +206,7 @@ if __name__ == "__main__":
             train_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
             train_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
 
-            train_miou, train_acc = iou_meter.get_miou_acc()
+            # train_miou, train_acc = iou_meter.get_miou_acc()
 
             loss.backward()
             optimizer.step()
@@ -212,10 +216,11 @@ if __name__ == "__main__":
         print("Epoch time : {:.1f}s".format(total_time))
 
         losses_train.append(train_loss / len(train_set))
+        writer.add_scalar('Loss/train', train_loss / len(train_set), epoch)
 
         logger.info(f"EPOCH: {epoch} (training)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {train_loss / len(train_set):.3f}")
-        logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(train_miou, 3)}")
+        # logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(train_miou, 3)}")
         logger.info(f"{'':<10}Micro IoU{'':<1} ----> {round(train_micro_iou.item(), 3)}")
         logger.info(f"{'':<10}Macro IoU{'':<1} ----> {round(train_macro_iou.item(), 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(train_recall.item(), 3)}")
@@ -253,29 +258,32 @@ if __name__ == "__main__":
             val_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
             val_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")        
 
-            val_miou, val_acc = iou_meter.get_miou_acc()
+            # val_miou, val_acc = iou_meter.get_miou_acc()
 
-        if val_micro_iou.item() >= best_val_miou:
-            best_val_miou = val_micro_iou.item()
+        if val_macro_iou.item() >= best_val_miou:
+            best_val_miou = val_macro_iou.item()
             best_val_epoch = epoch
             torch.save(model.state_dict(), f'./experiments/{log_num}/checkpoints/best_model.pth')
             logger.info(f'\n\nSaved new model at epoch {epoch}!\n\n')
 
         losses_val.append(val_loss / len(val_set))
+        writer.add_scalar('Loss/val', val_loss / len(val_set), epoch)
 
         logger.info(f"EPOCH: {epoch} (validating)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set):.3f}")
-        logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(val_miou, 3)}")
+        # logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(val_miou, 3)}")
         logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(val_micro_iou.item(), 3)}")
         logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(val_macro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(val_acc, 3)}")
+        # logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(val_acc, 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(val_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(val_precision.item(), 3)}")
         logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
 
     logger.info(f'Best micro IoU: {best_val_miou} at epoch {best_val_epoch}')
+    
+    writer.close()
 
-    # Plot train and validation accuracy graph
+    # Plot train and validation loss graph
     plt.figure(figsize=(10,5))
     plt.title("Train and validation loss")
     plt.plot(losses_train, label="train")
@@ -283,5 +291,5 @@ if __name__ == "__main__":
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.legend()
-    plt.show()
+    plt.savefig('loss_per_epoch.png')
 
