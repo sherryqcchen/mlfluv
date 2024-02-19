@@ -5,7 +5,21 @@ import xarray as xr
 import rioxarray
 import os
 import random
+import matplotlib.pyplot as plt
 
+def plot_pair(image, mask, surfix):
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    axes[0].imshow(image[4,:,:])
+    axes[0].set_title('rgb')
+
+    # axes[1].imshow(y_pred.cpu().numpy()[i], cmap='jet')
+    # axes[1].set_title('y_val_pred')
+
+    axes[1].imshow(mask, cmap='jet')
+    axes[1].set_title('mask')
+
+    plt.savefig(f'debug_plots/dataset_{surfix}.png')
+    plt.close()
 
 def normalize_per_channel(image):
 
@@ -23,14 +37,35 @@ def normalize_per_channel(image):
 
 def rotate_90_degrees(image, mask):
 
-    if random.random() > 0.8:
+    # plot_pair(image, mask, 'before_rotate')
+
+    if random.random() > 0.1:
         image = np.rot90(image, axes=(1, 2))
         mask = np.rot90(mask)
+
+        # plot_pair(image, mask, 'after_rotate')
+
+    return image, mask
+
+def flip(image, mask):
+
+    # plot_pair(image, mask, 'before_flip')
+
+    if random.random() > .5:
+        image = np.flip(image, axis=2)
+        mask = np.flip(mask, axis=1)
+    else:
+        image = np.flip(image, axis=3)
+        mask = np.flip(mask, axis=2)
+
+    # plot_pair(image, mask, 'after_flip')
 
     return image, mask
 
 
+
 def random_crop(image, mask, window=256):
+    # plot_pair(image, mask, 'before_crop')
 
     _, h, w = image.shape
 
@@ -38,6 +73,8 @@ def random_crop(image, mask, window=256):
     h_start = random.randint(0, h - window - 1)
     image = image[:, h_start:h_start + window, w_start:w_start + window]
     mask = mask[h_start:h_start + window, w_start:w_start + window]
+
+    # plot_pair(image, mask, 'after_crop')
 
     return image, mask
 
@@ -80,7 +117,7 @@ class MLFluvDataset(Dataset):
             mode = 'train',
             folds = [0, 1, 2, 4],
             label = 'hand',
-            one_hot_encode = True          
+            one_hot_encode = False          
     ):
         """
         Pytorch Dataset class to load samples from the MLFLuv dataset for fluvial system semantic segmentation.
@@ -114,9 +151,14 @@ class MLFluvDataset(Dataset):
         if self.mode == 'train':
             if random.random() > .7:
                 image, mask = rotate_90_degrees(image, mask)
+            if random.random() > .5:
+                image, mask = flip(image, mask)
 
             # random crop 256x256
-            image, mask = random_crop(image, mask, window=self.window)
+            if self.window == 512:
+                pass
+            else:               
+                image, mask = random_crop(image, mask, window=self.window)
 
             image = normalize_per_channel(image)
 
@@ -124,8 +166,11 @@ class MLFluvDataset(Dataset):
             # image = random_mask(image)
 
         elif self.mode == 'val':
-            # center crop no rotation (so that val/test are always the same)
-            image, mask = center_crop(image, mask, window=self.window)
+            if self.window == 512:
+                pass
+            else:      
+                # center crop no rotation (so that val/test are always the same)
+                image, mask = center_crop(image, mask, window=self.window)
             image = normalize_per_channel(image)
         else:
             image = normalize_per_channel(image) # do not crop testing set
