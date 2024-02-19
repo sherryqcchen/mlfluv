@@ -37,35 +37,27 @@ def normalize_per_channel(image):
 
 def rotate_90_degrees(image, mask):
 
-    # plot_pair(image, mask, 'before_rotate')
-
     if random.random() > 0.1:
         image = np.rot90(image, axes=(1, 2))
         mask = np.rot90(mask)
 
-        # plot_pair(image, mask, 'after_rotate')
-
     return image, mask
 
 def flip(image, mask):
-
-    # plot_pair(image, mask, 'before_flip')
+    plot_pair(image, mask, "before_flip")
 
     if random.random() > .5:
         image = np.flip(image, axis=2)
         mask = np.flip(mask, axis=1)
     else:
-        image = np.flip(image, axis=3)
-        mask = np.flip(mask, axis=2)
-
-    # plot_pair(image, mask, 'after_flip')
-
+        image = np.flip(image, axis=1)
+        mask = np.flip(mask, axis=0)
+    plot_pair(image, mask, "after_flip")
     return image, mask
 
 
 
 def random_crop(image, mask, window=256):
-    # plot_pair(image, mask, 'before_crop')
 
     _, h, w = image.shape
 
@@ -73,8 +65,6 @@ def random_crop(image, mask, window=256):
     h_start = random.randint(0, h - window - 1)
     image = image[:, h_start:h_start + window, w_start:w_start + window]
     mask = mask[h_start:h_start + window, w_start:w_start + window]
-
-    # plot_pair(image, mask, 'after_crop')
 
     return image, mask
 

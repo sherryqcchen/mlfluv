@@ -3,15 +3,13 @@ import torch
 from loguru import logger
 import matplotlib.pyplot as plt
 import numpy as np
-import torch.nn.functional as F
 import os
 import segmentation_models_pytorch as smp
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
 from dataset import MLFluvDataset
-from utils import parse_config_params, extract_patches, reconstruct_from_patches, reconstruct_from_patches_with_clip, \
-    get_band_stats
+from utils import parse_config_params, extract_patches, reconstruct_from_patches
 import matplotlib.pyplot as plt
 import os
 # os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
@@ -65,7 +63,7 @@ def infer_with_patches(img, net, config_params, preprocess_fn=None):
     return probs
 
 if __name__ == '__main__':
-    exp_folder = './experiments/1'
+    exp_folder = './experiments/2'
     output_folder = os.path.join(exp_folder, 'preds')
     os.makedirs(output_folder, exist_ok=True)
 
@@ -80,6 +78,7 @@ if __name__ == '__main__':
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
     batch_size = config_params["trainer"]["batch_size"]
+    window_size = config_params["trainer"]["window_size"]
 
     # LOGGING
 
@@ -104,7 +103,7 @@ if __name__ == '__main__':
     test_set = MLFluvDataset(
         config_params['data_loader']['args']['data_paths'],
         mode='test',
-        folds = [4]        
+        folds = [0, 1, 2, 3, 4]        
     )
 
     test_loader = DataLoader(test_set, batch_size=1, shuffle=False)  # TODO: workers
@@ -116,13 +115,16 @@ if __name__ == '__main__':
 
     for i, (image, mask) in enumerate(test_loader):
         image, mask = image.to(device), mask.to(device)
-
-        # Inference with patches, because the data tile size is not the same as window size
-        y_pred = infer_with_patches(np.transpose(image.cpu().detach().numpy()[0, :, :], (1, 2, 0)), model, config_params)
+        
+        if int(window_size) == 512:
+            y_pred = model(image).cpu().detach().numpy()
+        else:
+            # Inference with patches, because the data tile size is not the same as window size
+            y_pred = infer_with_patches(np.transpose(image.cpu().detach().numpy()[0, :, :], (1, 2, 0)), model, config_params)
 
         # y_pred_prob = model(image)
 
-        # plot true-color S2 image
+        # # plot true-color S2 image
         # true_color = cv2.normalize(np.transpose(image.cpu().numpy()[0, 3:2:1, :, :], (1 , 2, 0)),
         #                            dst=None,
         #                            alpha=0,

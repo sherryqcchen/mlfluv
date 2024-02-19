@@ -7,6 +7,7 @@ import json
 import numpy as np
 from loguru import logger
 import matplotlib.pyplot as plt
+import matplotlib
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -35,10 +36,9 @@ def get_class_weight(dataset, weight_func='inverse_log'):
         class_percent = frequencies / pixel_sum
 
         if weight_func == 'inverse_log':
-            # weight = 1 / np.log(class_percent)
             weight = pixel_sum / (len(classes) * np.log(frequencies.astype(np.float64)))
         elif weight_func == 'inverse_log_percent':
-             weight = 1 / np.log(class_percent.astype(np.float64))
+            weight = 1 / np.log(class_percent.astype(np.float64))
         elif weight_func == 'inverse_count': 
             weight = pixel_sum / (len(classes) * frequencies.astype(np.float64))
         elif weight_func == 'inverse_sqrt':
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     ####################################
     # PARSE CONFIG FILE
     ####################################
-    print("test for log 1")
+    print("test for log 2")
     config_params = parse_config_params('config.json')
 
     log_num = config_params["trainer"]["log_num"]
@@ -70,6 +70,8 @@ if __name__ == "__main__":
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
     batch_size = config_params["trainer"]["batch_size"]
+    window_size = config_params["trainer"]["window_size"]
+    weight_func = config_params["model"]["weights"]
 
     # LOGGING
 
@@ -106,7 +108,7 @@ if __name__ == "__main__":
         data_path=config_params['data_loader']['args']['data_paths'],
         mode='train',
         folds = [0, 1, 2, 3],
-        window=256,
+        window=window_size,
         label='hand',
         one_hot_encode=False
     )
@@ -115,16 +117,16 @@ if __name__ == "__main__":
         data_path=config_params['data_loader']['args']['data_paths'],
         mode='train',
         folds = [4],
-        window=256, 
+        window=window_size, 
         label='hand',
         one_hot_encode=False
     )
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)#, num_workers=2) # TODO: remove num_workers when debugging
-    val_loader = DataLoader(val_set, batch_size=1)#, num_workers=2) # TODO: remove num_workers when debugging
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4) # TODO: remove num_workers when debugging
+    val_loader = DataLoader(val_set, batch_size=1, num_workers=4) # TODO: remove num_workers when debugging
     
-    class_weights = get_class_weight(train_set, weight_func='inverse_log')
-    print(class_weights)
+    class_weights = get_class_weight(train_set, weight_func=weight_func)
+    # print(class_weights)
 
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
     # TODO: add weights to the water and sediment classes
@@ -133,7 +135,8 @@ if __name__ == "__main__":
     # TODO change reduction to 'none' causing error, find out which one I should use
     criterion = nn.CrossEntropyLoss(reduction='mean',
                                     weight=weights,
-                                    label_smoothing=0.01)
+                                    label_smoothing=0.01, 
+                                    ignore_index=7)
     # criterion = smp.losses.DiceLoss(mode='multiclass')
 
     # TODO: also try focal loss, dice loss function
@@ -198,6 +201,21 @@ if __name__ == "__main__":
             # Convert with argmax to reshape the output n_classes layers to only one layer.
             y_pred = y_pred.argmax(dim=1) 
 
+            # for i in range(len(y_batch)):
+            #     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+            #     axes[0].imshow(y_batch.cpu().numpy()[i], cmap='jet')
+            #     axes[0].set_title('y_batch')
+
+            #     # axes[1].imshow(y_pred.cpu().numpy()[i], cmap='jet')
+            #     # axes[1].set_title('y_val_pred')
+
+            #     axes[1].imshow(X_batch.cpu().numpy()[i, 0, :, :])
+            #     axes[1].set_title('x_batch')
+
+            #     plt.savefig(f'debug_plots/{i}.png')
+            #     plt.close()
+                
+
             tp, fp, fn, tn = smp.metrics.get_stats(y_pred, y_batch, mode='multiclass', num_classes=num_classes)
             # compute metric
             train_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
@@ -261,7 +279,7 @@ if __name__ == "__main__":
             loss = criterion(y_val_pred, y_batch)
             val_loss += loss.item()
             # Convert with argmax to reshape the output n_classes layers to only one layer.
-            y_val_pred = y_val_pred.argmax(dim=1) 
+            y_val_pred = y_val_pred.argmax(dim=1)         
 
             tp, fp, fn, tn = smp.metrics.get_stats(y_val_pred, y_batch, mode='multiclass', num_classes=num_classes)
             # compute metric
@@ -273,12 +291,6 @@ if __name__ == "__main__":
             val_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")        
 
             val_jaccard_index.update(y_val_pred, y_batch)
-
-        if val_macro_iou.item() >= best_val_miou:
-            best_val_miou = val_macro_iou.item()
-            best_val_epoch = epoch
-            torch.save(model.state_dict(), f'./experiments/{log_num}/checkpoints/best_model.pth')
-            logger.info(f'\n\nSaved new model at epoch {epoch}!\n\n')
 
         losses_val.append(val_loss / len(val_set))
         writer.add_scalar('Loss/val', val_loss / len(val_set), epoch)
@@ -293,6 +305,14 @@ if __name__ == "__main__":
         
         # Compute mean IoU across all classes
         val_miou = sum(class_wise_iou_val) / len(class_wise_iou_val)
+
+        # if val_miou.item() >= best_val_miou:
+        if val_miou >= best_val_miou:
+            # best_val_miou = val_miou.item()
+            best_val_miou = val_miou
+            best_val_epoch = epoch
+            torch.save(model.state_dict(), f'./experiments/{log_num}/checkpoints/best_model.pth')
+            logger.info(f'\n\nSaved new model at epoch {epoch}!\n\n')
 
         logger.info(f"EPOCH: {epoch} (validating)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set):.3f}")
