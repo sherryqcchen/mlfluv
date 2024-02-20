@@ -49,7 +49,7 @@ def get_class_weight(dataset, weight_func='inverse_log'):
             weight = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=train_labels)
 
         # the weight for class 7 (clouds and no data) is not needed, so it should be zero out
-        if 7 in classes:
+        if 6 in classes:
             weight[-1] = 0
 
         return weight
@@ -113,7 +113,8 @@ if __name__ == "__main__":
         folds = [0, 1, 2, 3],
         window=window_size,
         label='hand',
-        one_hot_encode=False
+        one_hot_encode=False,
+        merge_crop=True
     )
 
     val_set = MLFluvDataset(
@@ -122,11 +123,12 @@ if __name__ == "__main__":
         folds = [4],
         window=window_size, 
         label='hand',
-        one_hot_encode=False
+        one_hot_encode=False,
+        merge_crop=True
     )
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4) # TODO: remove num_workers when debugging
-    val_loader = DataLoader(val_set, batch_size=1, num_workers=4) # TODO: remove num_workers when debugging
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=8) # TODO: remove num_workers when debugging
+    val_loader = DataLoader(val_set, batch_size=1, num_workers=8) # TODO: remove num_workers when debugging
     
     class_weights = get_class_weight(train_set, weight_func=weight_func)
     # print(class_weights)
@@ -140,7 +142,7 @@ if __name__ == "__main__":
         criterion = nn.CrossEntropyLoss(reduction='mean',
                                         weight=weights,
                                         label_smoothing=0.01, 
-                                        ignore_index=7)
+                                        ignore_index=6)
     elif loss_func == "FocalLoss":
         criterion = torch.hub.load(
             'adeelh/pytorch-multi-class-focal-loss',
@@ -160,7 +162,7 @@ if __name__ == "__main__":
     
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
 
     history = {
         'train_loss': [],
@@ -199,8 +201,8 @@ if __name__ == "__main__":
         train_iou = 0
         train_cm = 0
 
-        train_jaccard_index = JaccardIndex(task='multiclass', num_classes=num_classes, ignore_index=7, average='none').to(device)
-        val_jaccard_index = JaccardIndex(task='multiclass', num_classes=num_classes, ignore_index=7, average='none').to(device)
+        train_jaccard_index = JaccardIndex(task='multiclass', num_classes=num_classes, ignore_index=6, average='none').to(device)
+        val_jaccard_index = JaccardIndex(task='multiclass', num_classes=num_classes, ignore_index=6, average='none').to(device)
 
         t_start = time.time()
 

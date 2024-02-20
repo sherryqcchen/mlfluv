@@ -107,6 +107,7 @@ class MLFluvDataset(Dataset):
             mode = 'train',
             folds = [0, 1, 2, 4],
             label = 'hand',
+            merge_crop=False,
             one_hot_encode = False          
     ):
         """
@@ -129,6 +130,7 @@ class MLFluvDataset(Dataset):
         self.norm = norm
         self.label = label
         self.one_hot_encode = one_hot_encode
+        self.merge_crop = merge_crop
 
         if self.one_hot_encode:
             self.label_values = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -193,7 +195,17 @@ class MLFluvDataset(Dataset):
             mask = auto_mask_arr
 
         # mask no data label as clouds (the class that has not shown in the dataset yet)
-        mask = np.where(mask == -999, 7, mask)    
+        mask = np.where(mask == -999, 7, mask) 
+
+        # merge crop class (3) to shallow-rooted vegetation (2)
+        if self.merge_crop:
+            mask = np.where(mask == 3, 2, mask) 
+            # re-organise the sequence to [0, 1, 2, 3, 4, 5, 6], class number turns to 7
+            mask = np.where(mask == 4, 3, mask)
+            mask = np.where(mask == 5, 4, mask)
+            mask = np.where(mask == 6, 5, mask)
+            mask = np.where(mask == 7, 6, mask)
+
 
         # Train on S1 2 bands and S2 13 bands
         # clip each image to 512*512 as height * width
@@ -229,11 +241,11 @@ class MLFluvDataset(Dataset):
 
 if __name__ == '__main__':
 
-    my_dataset = MLFluvDataset(folds=None)
+    my_dataset = MLFluvDataset(folds=[0,1,2,3,4], merge_crop=True)
     print(len(my_dataset.data))
     # print(my_dataset.data[0])
 
     for idx, (image, label) in enumerate(my_dataset):
-        # print(idx)
-        print(image.shape)
-        print(label.dtype)
+        print(idx)
+        # print(image.shape)
+        print(np.unique(label))

@@ -63,7 +63,7 @@ def infer_with_patches(img, net, config_params, preprocess_fn=None):
     return probs
 
 if __name__ == '__main__':
-    exp_folder = './experiments/5'
+    exp_folder = './experiments/6'
     output_folder = os.path.join(exp_folder, 'preds')
     os.makedirs(output_folder, exist_ok=True)
 
@@ -103,7 +103,8 @@ if __name__ == '__main__':
     test_set = MLFluvDataset(
         config_params['data_loader']['args']['data_paths'],
         mode='test',
-        folds = [0, 1, 2, 3, 4]        
+        folds = [0, 1, 2, 3, 4],
+        merge_crop=True        
     )
 
     test_loader = DataLoader(test_set, batch_size=1, shuffle=False)  # TODO: workers
