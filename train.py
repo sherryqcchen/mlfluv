@@ -139,7 +139,7 @@ if __name__ == "__main__":
     if loss_func == "CrossEntropyLoss":
         criterion = nn.CrossEntropyLoss(reduction='mean',
                                         weight=weights,
-                                        label_smoothing=0.005, 
+                                        label_smoothing=0.01, 
                                         ignore_index=7)
     elif loss_func == "FocalLoss":
         criterion = torch.hub.load(
@@ -158,7 +158,9 @@ if __name__ == "__main__":
     # TODO: also try focal loss, dice loss function
     # TODO: calculate mean IoU and class IoU
     
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=0.1)
+
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
 
     history = {
         'train_loss': [],
@@ -308,6 +310,8 @@ if __name__ == "__main__":
 
             val_jaccard_index.update(y_val_pred, y_batch)
 
+        scheduler.step(val_loss)
+
         losses_val.append(val_loss / len(val_set))
         writer.add_scalar('Loss/val', val_loss / len(val_set), epoch)
 
@@ -340,6 +344,8 @@ if __name__ == "__main__":
         logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
 
         val_jaccard_index.reset()
+
+        
 
     logger.info(f'Best micro IoU: {best_val_miou} at epoch {best_val_epoch}')
     
