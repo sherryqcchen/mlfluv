@@ -60,7 +60,6 @@ if __name__ == "__main__":
     ####################################
     # PARSE CONFIG FILE
     ####################################
-    print("test for log 2")
     config_params = parse_config_params('config.json')
 
     log_num = config_params["trainer"]["log_num"]
@@ -72,6 +71,10 @@ if __name__ == "__main__":
     batch_size = config_params["trainer"]["batch_size"]
     window_size = config_params["trainer"]["window_size"]
     weight_func = config_params["model"]["weights"]
+    loss_func = config_params["model"]['loss_function']
+
+    print(f"test for log {log_num}")
+
 
     # LOGGING
 
@@ -115,15 +118,15 @@ if __name__ == "__main__":
 
     val_set = MLFluvDataset(
         data_path=config_params['data_loader']['args']['data_paths'],
-        mode='train',
+        mode='val',
         folds = [4],
         window=window_size, 
         label='hand',
         one_hot_encode=False
     )
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4) # TODO: remove num_workers when debugging
-    val_loader = DataLoader(val_set, batch_size=1, num_workers=4) # TODO: remove num_workers when debugging
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)#, num_workers=4) # TODO: remove num_workers when debugging
+    val_loader = DataLoader(val_set, batch_size=1)#, num_workers=4) # TODO: remove num_workers when debugging
     
     class_weights = get_class_weight(train_set, weight_func=weight_func)
     # print(class_weights)
@@ -133,10 +136,23 @@ if __name__ == "__main__":
     
     # SET LOSS, OPTIMIZER
     # TODO change reduction to 'none' causing error, find out which one I should use
-    criterion = nn.CrossEntropyLoss(reduction='mean',
-                                    weight=weights,
-                                    label_smoothing=0.01, 
-                                    ignore_index=7)
+    if loss_func == "CrossEntropyLoss":
+        criterion = nn.CrossEntropyLoss(reduction='mean',
+                                        weight=weights,
+                                        label_smoothing=0.005, 
+                                        ignore_index=7)
+    elif loss_func == "FocalLoss":
+        criterion = torch.hub.load(
+            'adeelh/pytorch-multi-class-focal-loss',
+            model='focal_loss',
+            alpha=weights,
+            gamma=2,
+            reduction='mean',
+            device=device,
+            dtype=torch.float32,
+            force_reload=False
+        )
+
     # criterion = smp.losses.DiceLoss(mode='multiclass')
 
     # TODO: also try focal loss, dice loss function
