@@ -63,7 +63,7 @@ def infer_with_patches(img, net, config_params, preprocess_fn=None):
     return probs
 
 if __name__ == '__main__':
-    exp_folder = './experiments/2'
+    exp_folder = './experiments/5'
     output_folder = os.path.join(exp_folder, 'preds')
     os.makedirs(output_folder, exist_ok=True)
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
         image, mask = image.to(device), mask.to(device)
         
         if int(window_size) == 512:
-            y_pred = model(image).cpu().detach().numpy()
+            y_pred = model(image).cpu().detach().numpy().squeeze()
         else:
             # Inference with patches, because the data tile size is not the same as window size
             y_pred = infer_with_patches(np.transpose(image.cpu().detach().numpy()[0, :, :], (1, 2, 0)), model, config_params)

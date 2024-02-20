@@ -125,8 +125,8 @@ if __name__ == "__main__":
         one_hot_encode=False
     )
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)#, num_workers=4) # TODO: remove num_workers when debugging
-    val_loader = DataLoader(val_set, batch_size=1)#, num_workers=4) # TODO: remove num_workers when debugging
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4) # TODO: remove num_workers when debugging
+    val_loader = DataLoader(val_set, batch_size=1, num_workers=4) # TODO: remove num_workers when debugging
     
     class_weights = get_class_weight(train_set, weight_func=weight_func)
     # print(class_weights)
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     # TODO: also try focal loss, dice loss function
     # TODO: calculate mean IoU and class IoU
     
-    optimizer = optim.Adam(model.parameters(), lr=0.1)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
 
@@ -311,6 +311,7 @@ if __name__ == "__main__":
             val_jaccard_index.update(y_val_pred, y_batch)
 
         scheduler.step(val_loss)
+        print("lr:", scheduler._last_lr)
 
         losses_val.append(val_loss / len(val_set))
         writer.add_scalar('Loss/val', val_loss / len(val_set), epoch)
