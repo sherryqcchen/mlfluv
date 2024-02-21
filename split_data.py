@@ -73,10 +73,12 @@ def split_n_folds(n, folder_list, save_dir=None):
 
 if __name__ == '__main__':
     
-    labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_1000_sample_labelled'
+    # labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_1000_sample_labelled'
+    labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_10000_sample'
 
-    hand_label_list = glob.glob(os.path.join(labelled_data_path, '**/*hand.tif'))
-    print(len(hand_label_list))
+    # hand_label_list = glob.glob(os.path.join(labelled_data_path, '**/*hand.tif'))
+    auto_label_list = glob.glob(os.path.join(labelled_data_path, '**/*ESRI.tif'))
+    print(len(auto_label_list))
 
     # broken_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/labelled_data_with_NaNs'
     label_list = []
@@ -130,4 +132,6 @@ if __name__ == '__main__':
     print(len(label_list))
 
     # Random shuffle data and split them into 5 folds
-    split_n_folds(5, label_list)
+    # split_n_folds(5, label_list, save_dir='/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds')
+
+    split_n_folds(5, label_list, save_dir='/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_auto')

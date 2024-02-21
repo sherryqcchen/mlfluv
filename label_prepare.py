@@ -131,11 +131,11 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, rema
 
 if __name__=='__main__':
 
-    PLOT_DATA = True
+    PLOT_DATA = False
     CONVERT_TO_TIFF = True
-    REMAP_SEDIMENT = True
+    REMAP_SEDIMENT = False
 
-    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_1000_sample'
+    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_10000_sample'
     
     point_path_list = glob.glob(os.path.join(data_path, '*'))
     print(f"The count of total downloaded data points: {len(point_path_list)}")
@@ -199,7 +199,7 @@ if __name__=='__main__':
     print(f"The count of data points that have water and bare pixels: {len(water_point_path)}")
 
     # The path for storing the data with both water and bare pixels
-    dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_1000_sample'
+    dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_10000_sample'
     
     for path in water_point_path:    
 

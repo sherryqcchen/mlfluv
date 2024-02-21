@@ -176,26 +176,32 @@ class MLFluvDataset(Dataset):
         data_paths = self.data[index]
 
         # if the input data is changed, go to split_data.py to check the new orders of s1, s2 and labels
+        if len(data_paths) == 4:
+            s1_path = data_paths[2]
+            s2_path = data_paths[3]
 
-        s1_path = data_paths[2]
-        s2_path = data_paths[3]
+            auto_mask = data_paths[0]
+            hand_mask = data_paths[1]
 
-        auto_mask = data_paths[0]
-        hand_mask = data_paths[1]
+        elif len(data_paths)==3:
+            s1_path = data_paths[1]
+            s2_path = data_paths[2]  
+
+            auto_mask = data_paths[0]    
 
         s1_arr = np.load(s1_path) # shape [h, w, band], band=2
         s2_arr = np.load(s2_path) # shape [h, w, band], band=13
 
-        auto_mask_arr = np.load(auto_mask).squeeze()[:512, :512]  
-        hand_mask_arr = rioxarray.open_rasterio(hand_mask).data.squeeze()[:512, :512]
-
         if self.label == 'hand':
+            hand_mask_arr = rioxarray.open_rasterio(hand_mask).data.squeeze()[:512, :512]
             mask = hand_mask_arr
         else:
+            auto_mask_arr = np.load(auto_mask).squeeze()[:512, :512]  
             mask = auto_mask_arr
 
         # mask no data label as clouds (the class that has not shown in the dataset yet)
         mask = np.where(mask == -999, 7, mask) 
+        self.num_classes = 8
 
         # merge crop class (3) to shallow-rooted vegetation (2)
         if self.merge_crop:
@@ -205,6 +211,14 @@ class MLFluvDataset(Dataset):
             mask = np.where(mask == 5, 4, mask)
             mask = np.where(mask == 6, 5, mask)
             mask = np.where(mask == 7, 6, mask)
+
+            self.num_classes = 7
+
+        if self.label == 'auto':
+            # auto labels do not have sediment class (5), therefore we need to reorganise the class values to make them consistant
+            mask = np.where(mask == 5, 4, mask)
+            mask = np.where(mask == 6, 5, mask)
+            self.num_classes = 6
 
 
         # Train on S1 2 bands and S2 13 bands
@@ -241,11 +255,15 @@ class MLFluvDataset(Dataset):
 
 if __name__ == '__main__':
 
-    my_dataset = MLFluvDataset(folds=[0,1,2,3,4], merge_crop=True)
-    print(len(my_dataset.data))
+    my_dataset = MLFluvDataset(data_path="/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_auto", 
+                               folds=[0], 
+                               mode='train',
+                               label='auto', 
+                               merge_crop=True)
+    print(len(my_dataset.data[0]))
     # print(my_dataset.data[0])
 
     for idx, (image, label) in enumerate(my_dataset):
         print(idx)
-        # print(image.shape)
+        print(image.shape)
         print(np.unique(label))

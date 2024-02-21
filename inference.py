@@ -63,7 +63,7 @@ def infer_with_patches(img, net, config_params, preprocess_fn=None):
     return probs
 
 if __name__ == '__main__':
-    exp_folder = './experiments/6'
+    exp_folder = './experiments/9'
     output_folder = os.path.join(exp_folder, 'preds')
     os.makedirs(output_folder, exist_ok=True)
 
