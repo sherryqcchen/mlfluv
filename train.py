@@ -48,9 +48,18 @@ def get_class_weight(dataset, weight_func='inverse_log'):
             # weight = np.ones(classes.shape[0], dtype=np.float64)
             weight = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=train_labels)
 
-        # the weight for class 7 (clouds and no data) is not needed, so it should be zero out
-        if 6 in classes:
-            weight[-1] = 0
+        # the weight for the last class (clouds and no data) is not needed, so it should be zero out.
+        # when merge crop class to grass, the classes has 7 elements, and the no data/cloud class is 6,
+        # not merging crop to grass, the no data class is 7.
+        if len(classes)==8:
+            if 7 in classes:
+                weight[-1] = 0
+        elif len(classes)==7:
+            if 6 in classes:
+                weight[-1] = 0
+        elif len(classes)==6:
+            if 5 in classes:
+                weight[-1] = 0
 
         return weight
 
@@ -74,7 +83,6 @@ if __name__ == "__main__":
     loss_func = config_params["model"]['loss_function']
 
     print(f"test for log {log_num}")
-
 
     # LOGGING
 
@@ -112,7 +120,7 @@ if __name__ == "__main__":
         mode='train',
         folds = [0, 1, 2, 3],
         window=window_size,
-        label='hand',
+        label='auto',
         one_hot_encode=False,
         merge_crop=True
     )
@@ -122,13 +130,13 @@ if __name__ == "__main__":
         mode='val',
         folds = [4],
         window=window_size, 
-        label='hand',
+        label='auto',
         one_hot_encode=False,
         merge_crop=True
     )
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=8) # TODO: remove num_workers when debugging
-    val_loader = DataLoader(val_set, batch_size=1, num_workers=8) # TODO: remove num_workers when debugging
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2) # TODO: remove num_workers when debugging
+    val_loader = DataLoader(val_set, batch_size=1, num_workers=2) # TODO: remove num_workers when debugging
     
     class_weights = get_class_weight(train_set, weight_func=weight_func)
     # print(class_weights)
@@ -162,7 +170,7 @@ if __name__ == "__main__":
     
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20)
 
     history = {
         'train_loss': [],
@@ -221,19 +229,19 @@ if __name__ == "__main__":
             # Convert with argmax to reshape the output n_classes layers to only one layer.
             y_pred = y_pred.argmax(dim=1) 
 
-            # for i in range(len(y_batch)):
-            #     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-            #     axes[0].imshow(y_batch.cpu().numpy()[i], cmap='jet')
-            #     axes[0].set_title('y_batch')
+            for i in range(len(y_batch)):
+                fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+                axes[0].imshow(y_batch.cpu().numpy()[i], cmap='jet')
+                axes[0].set_title('y_batch')
 
-            #     # axes[1].imshow(y_pred.cpu().numpy()[i], cmap='jet')
-            #     # axes[1].set_title('y_val_pred')
+                # axes[1].imshow(y_pred.cpu().numpy()[i], cmap='jet')
+                # axes[1].set_title('y_val_pred')
 
-            #     axes[1].imshow(X_batch.cpu().numpy()[i, 0, :, :])
-            #     axes[1].set_title('x_batch')
+                axes[1].imshow(X_batch.cpu().numpy()[i, 0, :, :])
+                axes[1].set_title('x_batch')
 
-            #     plt.savefig(f'debug_plots/{i}.png')
-            #     plt.close()
+                plt.savefig(f'debug_plots/train_{i}.png')
+                plt.close()
                 
 
             tp, fp, fn, tn = smp.metrics.get_stats(y_pred, y_batch, mode='multiclass', num_classes=num_classes)
@@ -299,7 +307,21 @@ if __name__ == "__main__":
             loss = criterion(y_val_pred, y_batch)
             val_loss += loss.item()
             # Convert with argmax to reshape the output n_classes layers to only one layer.
-            y_val_pred = y_val_pred.argmax(dim=1)         
+            y_val_pred = y_val_pred.argmax(dim=1)
+            
+            for i in range(len(y_batch)):
+                fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+                axes[0].imshow(y_batch.cpu().numpy()[i], cmap='jet')
+                axes[0].set_title('y_batch')
+
+                # axes[1].imshow(y_pred.cpu().numpy()[i], cmap='jet')
+                # axes[1].set_title('y_val_pred')
+
+                axes[1].imshow(X_batch.cpu().numpy()[i, 0, :, :])
+                axes[1].set_title('x_batch')
+
+                plt.savefig(f'debug_plots/val_{i}.png')
+                plt.close()                    
 
             tp, fp, fn, tn = smp.metrics.get_stats(y_val_pred, y_batch, mode='multiclass', num_classes=num_classes)
             # compute metric
@@ -320,7 +342,7 @@ if __name__ == "__main__":
 
         val_ious = val_jaccard_index.compute()
 
-                # Compute class-wise IoU from the Jaccard Index
+        # Compute class-wise IoU from the Jaccard Index
         class_wise_iou_val = []
         for class_idx in range(num_classes):
             class_iou = val_ious[class_idx]
