@@ -44,7 +44,7 @@ def rotate_90_degrees(image, mask):
     return image, mask
 
 def flip(image, mask):
-    plot_pair(image, mask, "before_flip")
+    # plot_pair(image, mask, "before_flip")
 
     if random.random() > .5:
         image = np.flip(image, axis=2)
@@ -52,7 +52,7 @@ def flip(image, mask):
     else:
         image = np.flip(image, axis=1)
         mask = np.flip(mask, axis=0)
-    plot_pair(image, mask, "after_flip")
+    # plot_pair(image, mask, "after_flip")
     return image, mask
 
 
@@ -167,8 +167,6 @@ class MLFluvDataset(Dataset):
         else:
             image = normalize_per_channel(image) # do not crop testing set
 
-        image = np.transpose(image, )
-
         return image, mask
 
     def __getitem__(self, index):
@@ -225,11 +223,15 @@ class MLFluvDataset(Dataset):
         # clip each image to 512*512 as height * width
         image = np.dstack((s1_arr, s2_arr))[:512, :512, :]  # shape [h, w, band], band=15
         image = np.transpose(image, (2, 0, 1))  # shape [band, h, w], band=15
+
+        plot_pair(image, mask, "before_transform")
         
         # Train only on Sen2 13 bands
         # image = s2_image
 
         image, mask = self.transform(image, mask) # image shape [windows_size, window_size, band], band=15
+
+        plot_pair(image, mask, "after_transform")
 
         # one-hot-encode the mask
         if self.one_hot_encode:
@@ -237,14 +239,12 @@ class MLFluvDataset(Dataset):
             masks = [(mask == idx) for idx in class_idx]
             mask = np.stack(masks, axis = -1) # shape [h, w, band], band=8
 
-            mask = np.transpose(mask, (2, 0, 1)) # shape [band, h, w], band=8
-
-        image = np.transpose(image, (2, 0, 1)) # shape [15, 256, 256]
-        # mask = np.transpose(mask, (2, 0, 1)) # shape [band, h, w], band=8
+        plot_pair(image, mask, "after_transpose")
 
         image = torch.from_numpy(image).float()
         mask = mask.astype("float")
         mask = torch.from_numpy(mask.copy()).long()
+        plot_pair(image, mask, "before_return")
 
         return image, mask
     
