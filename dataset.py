@@ -198,7 +198,7 @@ class MLFluvDataset(Dataset):
             mask = auto_mask_arr
 
         # mask no data label as clouds (the class that has not shown in the dataset yet)
-        mask = np.where(mask == -999, 7, mask) 
+        mask = np.where(mask < 0, 7, mask) 
         self.num_classes = 8
 
         # merge crop class (3) to shallow-rooted vegetation (2)
