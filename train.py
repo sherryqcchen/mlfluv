@@ -1,5 +1,6 @@
 import time
 import cv2
+import csv
 import os
 import shutil
 import sklearn
@@ -7,7 +8,6 @@ import json
 import numpy as np
 from loguru import logger
 import matplotlib.pyplot as plt
-import matplotlib
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -16,52 +16,13 @@ from torchmetrics import JaccardIndex
 from torch.utils.tensorboard import SummaryWriter
 import segmentation_models_pytorch as smp
 from dataset import MLFluvDataset
+from weight_calculator import get_class_weight
 
 
 def parse_config_params(config_file):
     with open(config_file, 'r') as f:
         config_params = json.load(f)
     return config_params
-
-def get_class_weight(dataset, weight_func='inverse_log'):
-        # get weights based on the pixel count of each class in train set 
-        # calculation refer to a post: 
-        # https://medium.com/gumgum-tech/handling-class-imbalance-by-introducing-sample-weighting-in-the-loss-function-3bdebd8203b4
-        labels = [label for _, label in dataset]
-
-        train_labels = np.stack(labels, axis=0).flatten()
-
-        pixel_sum = train_labels.shape[0]
-        classes, frequencies = np.unique(train_labels, return_counts=True)
-        class_percent = frequencies / pixel_sum
-
-        if weight_func == 'inverse_log':
-            weight = pixel_sum / (len(classes) * np.log(frequencies.astype(np.float64)))
-        elif weight_func == 'inverse_log_percent':
-            weight = 1 / np.log(class_percent.astype(np.float64))
-        elif weight_func == 'inverse_count': 
-            weight = pixel_sum / (len(classes) * frequencies.astype(np.float64))
-        elif weight_func == 'inverse_sqrt':
-            weight = pixel_sum / (len(classes) * np.sqrt(class_percent.astype(np.float64)))
-        else: 
-            print('No weight function is given. We use sklearn compute class weight function')
-            # weight = np.ones(classes.shape[0], dtype=np.float64)
-            weight = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=train_labels)
-
-        # the weight for the last class (clouds and no data) is not needed, so it should be zero out.
-        # when merge crop class to grass, the classes has 7 elements, and the no data/cloud class is 6,
-        # not merging crop to grass, the no data class is 7.
-        if len(classes)==8:
-            if 7 in classes:
-                weight[-1] = 0
-        elif len(classes)==7:
-            if 6 in classes:
-                weight[-1] = 0
-        elif len(classes)==6:
-            if 5 in classes:
-                weight[-1] = 0
-
-        return weight
 
 
 if __name__ == "__main__":
@@ -81,8 +42,9 @@ if __name__ == "__main__":
     window_size = config_params["trainer"]["window_size"]
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
+    weights_path = config_params["model"]['weights_path']
 
-    print(f"test for log {log_num}")
+    print(f"Train for log {log_num}")
 
     # LOGGING
 
@@ -135,14 +97,20 @@ if __name__ == "__main__":
         merge_crop=True
     )
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2) # TODO: remove num_workers when debugging
-    val_loader = DataLoader(val_set, batch_size=1, num_workers=2) # TODO: remove num_workers when debugging
-    
-    class_weights = get_class_weight(train_set, weight_func=weight_func)
-    # print(class_weights)
+    if os.path.isfile(weights_path):
+        class_weights = list(csv.reader(open(weights_path, "r"), delimiter=","))
+        class_weights = np.array([float(i) for i in class_weights[0]])
+    else:
+        class_weights = get_class_weight(train_set, weight_func=weight_func)
+    print(class_weights)
 
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
     # TODO: add weights to the water and sediment classes
+
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2) # TODO: remove num_workers when debugging
+    val_loader = DataLoader(val_set, batch_size=1, num_workers=2) # TODO: remove num_workers when debugging
+    
+
     
     # SET LOSS, OPTIMIZER
     # TODO change reduction to 'none' causing error, find out which one I should use
