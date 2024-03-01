@@ -1,14 +1,10 @@
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import cv2
 from matplotlib.colors import ListedColormap
 import matplotlib.patches as mpatches
 
-
-# plt.style.use('QC_publication')
-# sns.axes_style("darkgrid")
 
 def plot_lulc(data, title='LULC Class Map'):
     """
@@ -217,7 +213,7 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
 def plot_inference_result(sentinel2_rgb_image, sentinel1_vv_image, label_image, prediction_image, out_dir, out_suffix):
 
     # Set the font size globally
-    matplotlib.rcParams.update({'font.size': 20})
+    mpl.rcParams.update({'font.size': 20})
 
     # Define custom colors for each class
     colors = ['blue', 'darkgreen', 'lightyellow', 'red', 'gray', 'black']
@@ -226,7 +222,7 @@ def plot_inference_result(sentinel2_rgb_image, sentinel1_vv_image, label_image, 
     custom_cmap = ListedColormap(colors)
 
     # Define a normalization from values --> colors
-    norm = matplotlib.colors.BoundaryNorm([0, 1, 2, 3, 4, 5], 6)
+    norm = mpl.colors.BoundaryNorm([0, 0.5, 1.5, 2.5, 3.5, 4.5, 5], 6)
 
     # Assuming you have the following variables:
     # sentinel2_rgb_image: RGB image data

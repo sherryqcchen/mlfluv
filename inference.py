@@ -1,7 +1,6 @@
 import cv2
 import torch
 from loguru import logger
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import segmentation_models_pytorch as smp
