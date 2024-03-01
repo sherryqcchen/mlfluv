@@ -63,7 +63,7 @@ if __name__ == "__main__":
     # MODEL PARAMS
 
     ENCODER = config_params['model']['encoder']
-    ENCODER_WEIGHTS = None
+    ENCODER_WEIGHTS = 'imagenet' #None
     ACTIVATION = 'softmax2d'# None  # could be None for logits (binary) or 'softmax2d' for multicalss segmentation
 
     device = torch.device(device if torch.cuda.is_available() else "cpu")
@@ -82,7 +82,7 @@ if __name__ == "__main__":
         mode='train',
         folds = [0, 1, 2, 3],
         window=window_size,
-        label='auto',
+        label='hand',
         one_hot_encode=False,
         merge_crop=True
     )
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         mode='val',
         folds = [4],
         window=window_size, 
-        label='auto',
+        label='hand',
         one_hot_encode=False,
         merge_crop=True
     )
@@ -107,10 +107,8 @@ if __name__ == "__main__":
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
     # TODO: add weights to the water and sediment classes
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2) # TODO: remove num_workers when debugging
-    val_loader = DataLoader(val_set, batch_size=1, num_workers=2) # TODO: remove num_workers when debugging
-    
-
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)#, num_workers=2) # TODO: remove num_workers when debugging
+    val_loader = DataLoader(val_set, batch_size=1)#, num_workers=2) # TODO: remove num_workers when debugging
     
     # SET LOSS, OPTIMIZER
     # TODO change reduction to 'none' causing error, find out which one I should use
@@ -163,6 +161,8 @@ if __name__ == "__main__":
     losses_train = []
     losses_val = []
 
+    steps = 10 #(len(train_loader)) // batch_size
+
     # Track model running progress in tensorboard
 
     writer = SummaryWriter()    
@@ -197,20 +197,15 @@ if __name__ == "__main__":
             # Convert with argmax to reshape the output n_classes layers to only one layer.
             y_pred = y_pred.argmax(dim=1) 
 
-            for i in range(len(y_batch)):
-                fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-                axes[0].imshow(y_batch.cpu().numpy()[i], cmap='jet')
-                axes[0].set_title('y_batch')
+            # for i in range(len(y_batch)):
+            #     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+            #     axes[0].imshow(y_batch.cpu().numpy()[i], cmap='jet')
+            #     axes[0].set_title('y_batch')
+            #     axes[1].imshow(X_batch.cpu().numpy()[i, 0, :, :])
+            #     axes[1].set_title('x_batch')
 
-                # axes[1].imshow(y_pred.cpu().numpy()[i], cmap='jet')
-                # axes[1].set_title('y_val_pred')
-
-                axes[1].imshow(X_batch.cpu().numpy()[i, 0, :, :])
-                axes[1].set_title('x_batch')
-
-                plt.savefig(f'debug_plots/train_{i}.png')
-                plt.close()
-                
+            #     plt.savefig(f'debug_plots/train_{i}.png')
+            #     plt.close()
 
             tp, fp, fn, tn = smp.metrics.get_stats(y_pred, y_batch, mode='multiclass', num_classes=num_classes)
             # compute metric
@@ -247,6 +242,8 @@ if __name__ == "__main__":
         logger.info(f"EPOCH: {epoch} (training)")
         logger.info(f"{'':<10}Loss{'':<5} ----> {train_loss / len(train_set):.3f}")
         logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(train_miou, 3)}")
+        logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_train}")
+        logger.info(f"{'':<10}Class-wise IoUs{'':<1} ----> {round(class_wise_iou_train, 3)}")
         logger.info(f"{'':<10}Micro IoU{'':<1} ----> {round(train_micro_iou.item(), 3)}")
         logger.info(f"{'':<10}Macro IoU{'':<1} ----> {round(train_macro_iou.item(), 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(train_recall.item(), 3)}")
@@ -265,82 +262,82 @@ if __name__ == "__main__":
         val_iou = 0
         val_cm = 0
         
-        for X_batch, y_batch in val_loader:
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)  # send values to device (GPU)
-            y_val_pred = model(X_batch)
+        if batch_idx % steps == 0:
+            for X_batch, y_batch in val_loader:
+                X_batch, y_batch = X_batch.to(device), y_batch.to(device)  # send values to device (GPU)
+                y_val_pred = model(X_batch)
 
-            # y_val_pred_np = (torch.argmax(y_val_pred, dim=1).cpu().numpy()[0, :, :]) * 120
-            # cv2.imwrite(os.path.join(f'./experiments/{log_num}/val_{i}.png'), y_val_pred_np.astype(np.uint8))
+                # y_val_pred_np = (torch.argmax(y_val_pred, dim=1).cpu().numpy()[0, :, :]) * 120
+                # cv2.imwrite(os.path.join(f'./experiments/{log_num}/val_{i}.png'), y_val_pred_np.astype(np.uint8))
 
-            loss = criterion(y_val_pred, y_batch)
-            val_loss += loss.item()
-            # Convert with argmax to reshape the output n_classes layers to only one layer.
-            y_val_pred = y_val_pred.argmax(dim=1)
+                loss = criterion(y_val_pred, y_batch)
+                val_loss += loss.item()
+                # Convert with argmax to reshape the output n_classes layers to only one layer.
+                y_val_pred = y_val_pred.argmax(dim=1)
+                
+                for i in range(len(y_batch)):
+                    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+                    axes[0].imshow(y_batch.cpu().numpy()[i], cmap='jet')
+                    axes[0].set_title('y_batch')
+
+                    # axes[1].imshow(y_pred.cpu().numpy()[i], cmap='jet')
+                    # axes[1].set_title('y_val_pred')
+
+                    axes[1].imshow(X_batch.cpu().numpy()[i, 0, :, :])
+                    axes[1].set_title('x_batch')
+
+                    plt.savefig(f'debug_plots/val_{i}.png')
+                    plt.close()                    
+
+                tp, fp, fn, tn = smp.metrics.get_stats(y_val_pred, y_batch, mode='multiclass', num_classes=num_classes)
+                # compute metric
+                val_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
+                val_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro")
+                val_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro")
+                val_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="micro")
+                val_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
+                val_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")        
+
+                val_jaccard_index.update(y_val_pred, y_batch)
+
+            scheduler.step(val_loss)
+            print("lr:", scheduler._last_lr)
+
+            losses_val.append(val_loss / len(val_set))
+            writer.add_scalar('Loss/val', val_loss / len(val_set), epoch)
+
+            val_ious = val_jaccard_index.compute()
+
+            # Compute class-wise IoU from the Jaccard Index
+            class_wise_iou_val = []
+            for class_idx in range(num_classes):
+                class_iou = val_ious[class_idx]
+                class_wise_iou_val.append(class_iou.item())
             
-            for i in range(len(y_batch)):
-                fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-                axes[0].imshow(y_batch.cpu().numpy()[i], cmap='jet')
-                axes[0].set_title('y_batch')
+            # Compute mean IoU across all classes
+            val_miou = sum(class_wise_iou_val) / len(class_wise_iou_val)
 
-                # axes[1].imshow(y_pred.cpu().numpy()[i], cmap='jet')
-                # axes[1].set_title('y_val_pred')
+            # if val_miou.item() >= best_val_miou:
+            if val_miou >= best_val_miou:
+                # best_val_miou = val_miou.item()
+                best_val_miou = val_miou
+                best_val_epoch = epoch
+                torch.save(model.state_dict(), f'./experiments/{log_num}/checkpoints/best_model.pth')
+                logger.info(f'\n\nSaved new model at epoch {epoch}!\n\n')
 
-                axes[1].imshow(X_batch.cpu().numpy()[i, 0, :, :])
-                axes[1].set_title('x_batch')
+            logger.info(f"EPOCH: {epoch} (validating)")
+            logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set):.3f}")
+            logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(val_miou, 3)}")
+            logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_val}")
+            logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(val_micro_iou.item(), 3)}")
+            logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(val_macro_iou.item(), 3)}")
+            logger.info(f"{'':<10}Recall{'':<1} ----> {round(val_recall.item(), 3)}")
+            logger.info(f"{'':<10}Precision{'':<1} ----> {round(val_precision.item(), 3)}")
+            logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
 
-                plt.savefig(f'debug_plots/val_{i}.png')
-                plt.close()                    
+            val_jaccard_index.reset()
 
-            tp, fp, fn, tn = smp.metrics.get_stats(y_val_pred, y_batch, mode='multiclass', num_classes=num_classes)
-            # compute metric
-            val_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
-            val_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro")
-            val_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro")
-            val_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="micro")
-            val_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
-            val_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")        
-
-            val_jaccard_index.update(y_val_pred, y_batch)
-
-        scheduler.step(val_loss)
-        print("lr:", scheduler._last_lr)
-
-        losses_val.append(val_loss / len(val_set))
-        writer.add_scalar('Loss/val', val_loss / len(val_set), epoch)
-
-        val_ious = val_jaccard_index.compute()
-
-        # Compute class-wise IoU from the Jaccard Index
-        class_wise_iou_val = []
-        for class_idx in range(num_classes):
-            class_iou = val_ious[class_idx]
-            class_wise_iou_val.append(class_iou.item())
+        logger.info(f'Best micro IoU: {best_val_miou} at epoch {best_val_epoch}')
         
-        # Compute mean IoU across all classes
-        val_miou = sum(class_wise_iou_val) / len(class_wise_iou_val)
-
-        # if val_miou.item() >= best_val_miou:
-        if val_miou >= best_val_miou:
-            # best_val_miou = val_miou.item()
-            best_val_miou = val_miou
-            best_val_epoch = epoch
-            torch.save(model.state_dict(), f'./experiments/{log_num}/checkpoints/best_model.pth')
-            logger.info(f'\n\nSaved new model at epoch {epoch}!\n\n')
-
-        logger.info(f"EPOCH: {epoch} (validating)")
-        logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(val_set):.3f}")
-        logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(val_miou, 3)}")
-        logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(val_micro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(val_macro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Recall{'':<1} ----> {round(val_recall.item(), 3)}")
-        logger.info(f"{'':<10}Precision{'':<1} ----> {round(val_precision.item(), 3)}")
-        logger.info(f"{'':<10}F1{'':<1} ----> {round(train_f1.item(), 3)}")
-
-        val_jaccard_index.reset()
-
-        
-
-    logger.info(f'Best micro IoU: {best_val_miou} at epoch {best_val_epoch}')
-    
-    writer.close()
+        writer.close()
 

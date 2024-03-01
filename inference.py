@@ -7,12 +7,12 @@ import os
 import segmentation_models_pytorch as smp
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from torchmetrics import JaccardIndex
 
 from dataset import MLFluvDataset
 from utils import parse_config_params, extract_patches, reconstruct_from_patches
-import matplotlib.pyplot as plt
-import os
-# os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+from plotter import plot_inference_result
+
 
 def infer_with_patches(img, net, config_params, preprocess_fn=None):
     log_num = config_params["trainer"]["log_num"]
@@ -63,7 +63,7 @@ def infer_with_patches(img, net, config_params, preprocess_fn=None):
     return probs
 
 if __name__ == '__main__':
-    exp_folder = './experiments/9'
+    exp_folder = './experiments/10'
     output_folder = os.path.join(exp_folder, 'preds')
     os.makedirs(output_folder, exist_ok=True)
 
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     ENCODER_WEIGHTS = None
     ACTIVATION = None
 
-    device = torch.device(device if torch.cuda.is_available() else "cpu")
+    device = 'cpu' #torch.device(device if torch.cuda.is_available() else "cpu")
 
     preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER)
 
@@ -103,7 +103,9 @@ if __name__ == '__main__':
     test_set = MLFluvDataset(
         config_params['data_loader']['args']['data_paths'],
         mode='test',
-        folds = [0, 1, 2, 3, 4],
+        label='auto',
+        folds = [4],
+        one_hot_encode=False,
         merge_crop=True        
     )
 
@@ -114,6 +116,9 @@ if __name__ == '__main__':
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.eval()
 
+    # calculate IoU
+    test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=6, average='none').to(device)
+
     for i, (image, mask) in enumerate(test_loader):
         image, mask = image.to(device), mask.to(device)
         
@@ -123,46 +128,21 @@ if __name__ == '__main__':
             # Inference with patches, because the data tile size is not the same as window size
             y_pred = infer_with_patches(np.transpose(image.cpu().detach().numpy()[0, :, :], (1, 2, 0)), model, config_params)
 
-        # y_pred_prob = model(image)
-
-        # # plot true-color S2 image
-        # true_color = cv2.normalize(np.transpose(image.cpu().numpy()[0, 3:2:1, :, :], (1 , 2, 0)),
-        #                            dst=None,
-        #                            alpha=0,
-        #                            beta=255,
-        #                            norm_type=cv2.NORM_MINMAX).astype(np.uint8)
-
-        # # plot VV S1
-        # vv_img = cv2.normalize(image.cpu().numpy()[0, -2, :, :],
-        #                        dst=None,
-        #                        alpha=0,
-        #                        beta=255,
-        #                        norm_type=cv2.NORM_MINMAX).astype(np.uint8)
-
         y_pred_map = torch.from_numpy(y_pred).argmax(dim=0)
         print(np.unique(y_pred_map.numpy()))
 
         y = mask.cpu().detach().numpy()[0, :, :]
         print(np.unique(y))
-
-        if SHOW_PLOTS:
-            # plt.imshow(np.where(y_pred > .9, 1, 0))
-            # plt.imshow(y_pred)
-            # plt.show()
-
-            plt.imshow(true_color)
-            plt.show()
-            #
-            plt.imshow(vv_img)
-            plt.show()
-
-            plt.imshow(y)
-            plt.show()
-
-        cv2.imwrite(os.path.join(output_folder, f'{i}_mask.png'), (y * 255).astype(np.uint8))
-        # cv2.imwrite(os.path.join(output_folder, f'{i}_true_color_img.png'), true_color)
-        # cv2.imwrite(os.path.join(output_folder, f'{i}_vv_img.png'), vv_img)
-        cv2.imwrite(os.path.join(output_folder, f'{i}_pred.png'), (y_pred_map.numpy() * 255).astype(np.uint8))
+        
+        # Plot the S2 rgb, S1 vv, maks and prediction
+        s2_rgb = cv2.normalize(np.transpose(image.numpy()[0, 5:2:-1, :, :], (1,2,0)),
+                                   dst=None,
+                                   alpha=0,
+                                   beta=255,
+                                   norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+        s1_vv = image.numpy()[0,0,:,:]
+        
+        plot_inference_result(s2_rgb, s1_vv, y, y_pred_map, output_folder, i)
         
         tp, fp, fn, tn = smp.metrics.get_stats(y_pred_map, mask.cpu().squeeze().long(), mode='multiclass', num_classes=classes)
         # compute metric
@@ -173,7 +153,21 @@ if __name__ == '__main__':
         test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
         test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
 
+        test_jaccard_index.update(y_pred_map, mask.cpu().squeeze().long())
+        test_ious = test_jaccard_index.compute()
+
+        # Compute class-wise IoU from the Jaccard Index
+        class_wise_iou_test = []
+        for class_idx in range(classes):
+            class_iou = test_ious[class_idx]
+            class_wise_iou_test.append(class_iou.item())
+        
+        # Compute mean IoU across all classes
+        test_miou = sum(class_wise_iou_test) / len(class_wise_iou_test)
+
         logger.info(f"Testing)")
+        logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou, 3)}")
+        logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_test}")
         logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(test_micro_iou.item(), 3)}")
         logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(test_macro_iou.item(), 3)}")
         logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(test_accuracy.item(), 3)}")

@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import cv2
+from matplotlib.colors import ListedColormap
+import matplotlib.patches as mpatches
+
 
 # plt.style.use('QC_publication')
 # sns.axes_style("darkgrid")
@@ -208,6 +211,67 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
         plt.savefig(f'data_figures/{fig_name}.png')
     
     plt.cla()
+    plt.close(fig)
+
+
+def plot_inference_result(sentinel2_rgb_image, sentinel1_vv_image, label_image, prediction_image, out_dir, out_suffix):
+
+    # Set the font size globally
+    matplotlib.rcParams.update({'font.size': 20})
+
+    # Define custom colors for each class
+    colors = ['blue', 'darkgreen', 'lightyellow', 'red', 'gray', 'black']
+
+    # Create a custom color map using ListedColormap
+    custom_cmap = ListedColormap(colors)
+
+    # Define a normalization from values --> colors
+    norm = matplotlib.colors.BoundaryNorm([0, 1, 2, 3, 4, 5], 6)
+
+    # Assuming you have the following variables:
+    # sentinel2_rgb_image: RGB image data
+    # sentinel1_vv_image: Sentinel-1 VV image data
+    # label_image: Ground truth label image
+    # prediction_image: Predicted segmentation image
+
+    # Create a figure and axes with a shape of [2, 2]
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(18, 15))
+
+    # Plot Sentinel-2 RGB image
+    axes[0, 0].imshow(sentinel2_rgb_image)
+    axes[0, 0].set_title('Sentinel-2 RGB Image')
+    axes[0, 0].axis('off')
+
+    # Plot Sentinel-1 VV image
+    axes[0, 1].imshow(sentinel1_vv_image, cmap='gray')
+    axes[0, 1].set_title('Sentinel-1 VV Image')
+    axes[0, 1].axis('off')
+
+    # Plot ground truth label image
+    axes[1, 0].imshow(label_image, cmap=custom_cmap, norm=norm)
+    axes[1, 0].set_title('Ground Truth Label')
+    axes[1, 0].axis('off')
+
+    # Plot predicted segmentation image
+    axes[1, 1].imshow(prediction_image, cmap=custom_cmap, norm=norm)
+    axes[1, 1].set_title('Predicted Segmentation')
+    axes[1, 1].axis('off')
+
+    # Add color legend
+
+    class_labels = ['Water', 'Tree', 'Shallow-root vegetation', 'Urban', 'Bareground', 'No data']
+    legend_patches = [mpatches.Patch(color=color, label=label, edgecolor='black') for color, label in zip(colors, class_labels)]
+    plt.legend(handles=legend_patches, loc='lower left', bbox_to_anchor=(1, 0.5), fontsize=20)
+
+
+    # Adjust layout
+    # plt.tight_layout()
+    plt.subplots_adjust(left=0.1, bottom=0.1, right=0.7, top=0.9, wspace=0.3, hspace=0.4)
+
+    # Save the figure to a file
+    plt.savefig(f'{out_dir}/pred_{out_suffix}.png')
+
+    # Close the figure to free up memory
     plt.close(fig)
 
 
