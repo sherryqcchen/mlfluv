@@ -224,12 +224,6 @@ def plot_inference_result(sentinel2_rgb_image, sentinel1_vv_image, label_image, 
     # Define a normalization from values --> colors
     norm = mpl.colors.BoundaryNorm([0, 0.5, 1.5, 2.5, 3.5, 4.5, 5], 6)
 
-    # Assuming you have the following variables:
-    # sentinel2_rgb_image: RGB image data
-    # sentinel1_vv_image: Sentinel-1 VV image data
-    # label_image: Ground truth label image
-    # prediction_image: Predicted segmentation image
-
     # Create a figure and axes with a shape of [2, 2]
     fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(18, 15))
 
