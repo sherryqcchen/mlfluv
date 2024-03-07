@@ -39,7 +39,7 @@ def get_bounding_box(coord_list):
     ymax = coords[:, 1].max() # maximum latitude
     return xmin, xmax, ymin, ymax
 
-def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, remap_sediment=False):
+def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
     """
     Convert numpy ndarray from .npy file to tiff for visualization and labelling.
 
@@ -110,8 +110,6 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, rema
     else:
         # For all kinds or labels with dimensions [length, width, 1]
         # Write the label Numpy array to a TIFF file
-        if remap_sediment:
-            arr[arr == 6] = 5
 
         label = arr #.squeeze()
         with rasterio.open(
@@ -133,7 +131,6 @@ if __name__=='__main__':
 
     PLOT_DATA = False
     CONVERT_TO_TIFF = True
-    REMAP_SEDIMENT = False
 
     data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_10000_sample'
     
@@ -223,7 +220,7 @@ if __name__=='__main__':
         if CONVERT_TO_TIFF:
             convert_npy_to_tiff(s1_path, 's1', meta_path, new_path)
             convert_npy_to_tiff(s2_path, 's2', meta_path, new_path)
-            convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path, REMAP_SEDIMENT)  # remap_sediment = True      
+            convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path)     
 
         for fname in os.listdir(path):
             file_path = os.path.join(path, fname)
@@ -243,14 +240,6 @@ if __name__=='__main__':
 
         meta_path = [file for file in file_paths if file.endswith('.csv')][0]
 
-        if REMAP_SEDIMENT:
-            # convert bare pixels (6) to sediment label (5) for all images in the new fluvial folder:
-            esri_arr = np.load(esri_label_path)
-            esri_arr[esri_arr == 6] = 5
-            
-            new_esri_path = esri_label_path.split('.')[0] + '_water.npy'
-            np.save(new_esri_path, esri_arr) 
-
         # Plot S1, S2, ESRI label
         if PLOT_DATA:
             s1_arr = np.load(s1_path)
@@ -259,13 +248,6 @@ if __name__=='__main__':
 
             plotter.plot_s12label(s1_arr, s2_arr, esri_arr, meta_df, True, point_id)
 
-        
-
-        
-
-    # TODO trim data to 512*512 in the dataloader
     
-
-             
 
 
