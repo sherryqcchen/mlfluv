@@ -1,4 +1,5 @@
 import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
@@ -16,13 +17,13 @@ def plot_lulc(data, title='LULC Class Map'):
                             indicates the class value (0-7).
     """
 
-    lulc_cmap = mpl.colors.ListedColormap(['#4183C4', '#009600', '#CCFF99', '#F096FF', '#FA0000', '#FFBB22', '#B4B4B4', '#6BF5FF'])
+    lulc_cmap = mpl.colors.ListedColormap(['#6BF5FF', '#009600', '#CCFF99', '#4183C4', '#FA0000','#B4B4B4', '#FFBB22'])
 
-    plt.imshow(data, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+    plt.imshow(data, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
 
     # Add color bar for reference
     cbar = plt.colorbar(ticks=np.arange(0, 8))
-    class_names = ['water', 'tree', 'shallow-rooted vegetation', 'crops', 'build-up', 'fluvial sediment', 'bare', 'ice/snow']
+    class_names = ['background', 'tree', 'shallow-rooted vegetation','water', 'build-up', 'bare', 'fluvial sediment']
     cbar.set_label('Class')
     cbar.set_ticklabels(class_names)
 
@@ -94,7 +95,7 @@ def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig
                     norm_type=cv2.NORM_MINMAX).astype(np.uint8)
     s1 = s1_array[:,:,0]
 
-    lulc_cmap = mpl.colors.ListedColormap(['#4183C4', '#009600', '#CCFF99', '#F096FF', '#FA0000', '#FFBB22', '#B4B4B4', '#6BF5FF'])
+    lulc_cmap = mpl.colors.ListedColormap(['#6BF5FF', '#009600', '#CCFF99', '#4183C4', '#FA0000','#B4B4B4', '#FFBB22'])
 
     fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 5))
 
@@ -106,14 +107,14 @@ def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig
             im = ax.imshow(s2)
             ax.set_title('Sentinel-2 RGB stack', fontsize=20)
         elif i == 2:
-            im = ax.imshow(label_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            im = ax.imshow(label_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
             ax.set_title('Remapped ESRI label', fontsize=20)
     
      # Add color bar for reference
     fig.subplots_adjust(top=0.8, right=0.8)
     cbar_ax = fig.add_axes([0.82, 0.15, 0.02, 0.7])
-    cbar = fig.colorbar(im, cax=cbar_ax, ticks=np.arange(0, 8))
-    class_names = ['water', 'tree', 'shallow vege', 'crops', 'build', 'fluvial sediment', 'bare', 'ice/snow']
+    cbar = fig.colorbar(im, cax=cbar_ax, ticks=np.arange(0, 7))
+    class_names = ['background', 'tree', 'shallow-rooted vegetation','water', 'build-up', 'bare', 'fluvial sediment']
     cbar.ax.set_title('Class', fontsize=20)
     cbar.set_ticklabels(class_names)
     cbar.ax.tick_params(labelsize=16)
@@ -158,9 +159,7 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
                         norm_type=cv2.NORM_MINMAX).astype(np.uint8)
     s1 = s1_array[:,:,0]
     
-    lulc_cmap = mpl.colors.ListedColormap(['#4183C4', '#009600', '#CCFF99', '#F096FF', '#FA0000', '#FFBB22', '#B4B4B4', '#6BF5FF'])
-
-    # plt.imshow(data, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+    lulc_cmap = mpl.colors.ListedColormap(['#6BF5FF', '#009600', '#CCFF99', '#4183C4', '#FA0000','#B4B4B4', '#FFBB22'])
 
     fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(15, 15))
 
@@ -172,23 +171,23 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
             im = ax.imshow(s2)
             ax.set_title('Sentinel-2 RGB stack', fontsize=20)
         elif i == 2:
-            im = ax.imshow(esri_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            im = ax.imshow(esri_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
             ax.set_title('ESRI label', fontsize=20)
         elif i == 3:
-            im = ax.imshow(esawc_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            im = ax.imshow(esawc_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
             ax.set_title('ESA World Cover label', fontsize=20)
         elif i == 4:
-            im = ax.imshow(dw_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            im = ax.imshow(dw_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
             ax.set_title('Dynamic World label', fontsize=20)
         elif i == 5:
-            im = ax.imshow(glc10_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=7)
+            im = ax.imshow(glc10_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
             ax.set_title('FROM-GLC10 label', fontsize=20)
 
     # Add color bar for reference
     fig.subplots_adjust(top=0.9, right=0.8)
     cbar_ax = fig.add_axes([0.8, 0.15, 0.02, 0.5])
-    cbar = fig.colorbar(im, cax=cbar_ax, ticks=np.arange(0, 8))
-    class_names = ['water', 'tree', 'shallow vege', 'crops', 'build', 'fluvial sediment', 'bare', 'ice/snow']
+    cbar = fig.colorbar(im, cax=cbar_ax, ticks=np.arange(0, 7))
+    class_names = ['background', 'tree', 'shallow-rooted vegetation','water', 'build-up', 'bare', 'fluvial sediment']
     cbar.ax.set_title('Class', fontsize=20)
     cbar.set_ticklabels(class_names)
     cbar.ax.tick_params(labelsize=16)
@@ -222,7 +221,7 @@ def plot_inference_result(sentinel2_rgb_image, sentinel1_vv_image, label_image, 
     custom_cmap = ListedColormap(colors)
 
     # Define a normalization from values --> colors
-    norm = mpl.colors.BoundaryNorm([0, 0.5, 1.5, 2.5, 3.5, 4.5, 5], 6)
+    norm = mpl.colors.BoundaryNorm([0, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6], 7)
 
     # Create a figure and axes with a shape of [2, 2]
     fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(18, 15))
@@ -249,7 +248,7 @@ def plot_inference_result(sentinel2_rgb_image, sentinel1_vv_image, label_image, 
 
     # Add color legend
 
-    class_labels = ['Water', 'Tree', 'Shallow-root vegetation', 'Urban', 'Bareground', 'No data']
+    class_labels = ['background', 'tree', 'shallow-rooted vegetation','water', 'build-up', 'bare', 'fluvial sediment']
     legend_patches = [mpatches.Patch(color=color, label=label, edgecolor='black') for color, label in zip(colors, class_labels)]
     plt.legend(handles=legend_patches, loc='lower left', bbox_to_anchor=(1, 0.5), fontsize=20)
 

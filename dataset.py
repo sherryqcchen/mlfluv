@@ -130,7 +130,6 @@ class MLFluvDataset(Dataset):
         self.norm = norm
         self.label = label
         self.one_hot_encode = one_hot_encode
-        self.merge_crop = merge_crop
 
         if self.one_hot_encode:
             self.label_values = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -198,24 +197,11 @@ class MLFluvDataset(Dataset):
             mask = auto_mask_arr
 
         # mask no data label as clouds (the class that has not shown in the dataset yet)
-        mask = np.where(mask < 0, 7, mask) 
-        self.num_classes = 8
-
-        # merge crop class (3) to shallow-rooted vegetation (2)
-        if self.merge_crop:
-            mask = np.where(mask == 3, 2, mask) 
-            # re-organise the sequence to [0, 1, 2, 3, 4, 5, 6], class number turns to 7
-            mask = np.where(mask == 4, 3, mask)
-            mask = np.where(mask == 5, 4, mask)
-            mask = np.where(mask == 6, 5, mask)
-            mask = np.where(mask == 7, 6, mask)
-
-            self.num_classes = 7
+        mask = np.where(mask < 0, 0, mask) 
+        self.num_classes = 7
 
         if self.label == 'auto':
-            # auto labels do not have sediment class (5), therefore we need to reorganise the class values to make them consistant
-            mask = np.where(mask == 5, 4, mask)
-            mask = np.where(mask == 6, 5, mask)
+            # auto labels do not have sediment class (6), therefore reset the num_class = 6
             self.num_classes = 6
 
 
@@ -224,14 +210,14 @@ class MLFluvDataset(Dataset):
         image = np.dstack((s1_arr, s2_arr))[:512, :512, :]  # shape [h, w, band], band=15
         image = np.transpose(image, (2, 0, 1))  # shape [band, h, w], band=15
 
-        plot_pair(image, mask, "before_transform")
+        # plot_pair(image, mask, "before_transform")
         
         # Train only on Sen2 13 bands
         # image = s2_image
 
         image, mask = self.transform(image, mask) # image shape [windows_size, window_size, band], band=15
 
-        plot_pair(image, mask, "after_transform")
+        # plot_pair(image, mask, "after_transform")
 
         # one-hot-encode the mask
         if self.one_hot_encode:
@@ -239,12 +225,12 @@ class MLFluvDataset(Dataset):
             masks = [(mask == idx) for idx in class_idx]
             mask = np.stack(masks, axis = -1) # shape [h, w, band], band=8
 
-        plot_pair(image, mask, "after_transpose")
+        # plot_pair(image, mask, "after_transpose")
 
         image = torch.from_numpy(image).float()
         mask = mask.astype("float")
         mask = torch.from_numpy(mask.copy()).long()
-        plot_pair(image, mask, "before_return")
+        # plot_pair(image, mask, "before_return")
 
         return image, mask
     
@@ -258,8 +244,7 @@ if __name__ == '__main__':
     my_dataset = MLFluvDataset(data_path="/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_auto", 
                                folds=[0], 
                                mode='train',
-                               label='auto', 
-                               merge_crop=True)
+                               label='auto')
     print(len(my_dataset.data[0]))
     # print(my_dataset.data[0])
 

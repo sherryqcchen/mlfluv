@@ -120,22 +120,22 @@ def remap_lulc(image, lulc_type='esa_world_cover'):
     
     if lulc_type == 'esa_world_cover':
         from_list = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100]
-        to_list =   [1,  2,  2,  3,  4,  6,  7,  0,  2,  2,  7]
+        to_list =   [1,  2,  2,  2,  4,  5,  0,  3,  2,  2,  0]
         band_name = 'Map'
 
     elif lulc_type == 'dynamic_world':
         from_list = [0, 1, 2, 3, 5, 4, 6, 7, 8]
-        to_list =   [0, 1, 2, 2, 2, 3, 4, 6, 7]
+        to_list =   [3, 1, 2, 2, 2, 2, 4, 5, 0]
         band_name = 'label'
     
     elif lulc_type == 'from_glc10':
         from_list = [10, 20, 30, 40, 60, 80, 90, 100]
-        to_list =   [ 3,  1,  2,  2,  0,  4,  6,  7]
+        to_list =   [ 2,  1,  2,  2,  3,  4,  5,  0]
         band_name = 'b1'
     
     elif lulc_type == 'esri_land_cover':
         from_list = [1, 2, 4, 5, 7, 8, 9, 11]
-        to_list =   [0, 1, 2, 3, 4, 6, 7, 2]
+        to_list =   [3, 1, 2, 2, 4, 5, 0, 2]
         band_name = 'b1'
 
     else:
@@ -362,7 +362,8 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
                 # We also use lng, lat info in the point_id 
             point_id = s2_id + "_" + coord_string
 
-            data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
+            # data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
+            data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_10000_samples'
             point_path = os.path.join(data_path, point_id) 
 
             if not os.path.exists(point_path):
@@ -425,7 +426,7 @@ if __name__ == "__main__":
     year = 2020
 
     # Buffer the point to a rectangle called aoi with 2048*2048 size
-    points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_da_order_1000_sample.csv')
+    points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_da_order_10000_sample.csv')
     
     point_list = []
     with open(points_path, 'r') as file:
@@ -437,7 +438,7 @@ if __name__ == "__main__":
             point_list.append((coord,riv_order, da))
 
     # print(point_list)
-    for idx, (point, riv_ord, da) in enumerate(point_list):
+    for idx, (point, riv_ord, da) in enumerate(point_list[1241:]):
 
-        print(f"{idx}: {point}")
+        print(f"{idx+1241}: {point}")
         download_1_point_data(point, riv_ord, da)
