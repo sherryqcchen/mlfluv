@@ -28,7 +28,7 @@ Use the `random_sampler.py` script to create samples along the river network. Gi
 
 Run the `get_ee_data.py` script to download point data for points given in the CSV. Buffer each point to an Area of Interest and then download data, including Sentinel-1 & Sentinel-2 images, ESRI Land Cover map, ESA World Cover map, Dynamic World map, FROM-GLC10 map within the buffer. Remap all LULC maps to a uniform land cover scheme. Remapping rules are specified in `merge_lulc_class_new.png`.
 
-![Remapping LULC Classes](remapping_lulc_classes.png)
+![Remapping LULC Classes](merge_lulc_class_new.png)
 
 ## 4. Evaluate LULC Label
 
