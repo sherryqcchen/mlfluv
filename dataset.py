@@ -107,7 +107,6 @@ class MLFluvDataset(Dataset):
             mode = 'train',
             folds = [0, 1, 2, 4],
             label = 'hand',
-            merge_crop=False,
             one_hot_encode = False          
     ):
         """

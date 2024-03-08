@@ -5,9 +5,9 @@ import pandas as pd
 import rioxarray
 import plotter
 
-REMAP_HAND_LABEL = True
+REMAP_HAND_LABEL = False
 
-data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/mlfluv_s12lulc_data_water_from_1000_sample_labelled'
+data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/unlabelled_data'
 
 point_path_list = glob.glob(os.path.join(data_path, '*'))
 print(f"The count of total downloaded data points: {len(point_path_list)}")
@@ -25,10 +25,10 @@ def remap_mask(mask_arr):
 
     return mask_arr
 
-for idx, point_path in enumerate(point_path_list):
+for idx, point_path in enumerate(point_path_list[1:]):
 
     point_id = os.path.basename(point_path)
-    print(f"{idx}: {point_id}")
+    print(f"{idx+1}: {point_id}")
 
     # if point_id != '20200401T140051_20200401T140048_T21LWF_1272S5614W':
     #     continue
@@ -44,6 +44,7 @@ for idx, point_path in enumerate(point_path_list):
     except ValueError:
         esri_label_path = [file for file in file_paths if file.endswith('ESRI.tif')][0]
         esri_arr = rioxarray.open_rasterio(esri_label_path).squeeze()
+        esri_label_path = esri_label_path.split('.')[0] + '.npy'
     glc10_arr = np.load(glc10_label_path)
     dw_arr = np.load(dw_label_path)
     esawc_arr = np.load(esawc_label_path)

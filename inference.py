@@ -104,8 +104,7 @@ if __name__ == '__main__':
         mode='test',
         label='auto',
         folds = [4],
-        one_hot_encode=False,
-        merge_crop=True        
+        one_hot_encode=False      
     )
 
     test_loader = DataLoader(test_set, batch_size=1, shuffle=False)  # TODO: workers

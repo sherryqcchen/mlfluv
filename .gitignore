@@ -21,6 +21,7 @@ experiments/
 
 # Ignore log files
 *.log
+*.csv
 
 # Ignore IDE-specific files
 .vscode/
@@ -29,7 +30,7 @@ experiments/
 # Ignore image files
 *.tif
 *.npy
-# *.png
+*.png
 *.jpeg
 
 # Ignore output json files

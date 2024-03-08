@@ -1,90 +1,79 @@
-# Train for the initial model of Unet 
-
+# this script is for incremental learning 
 import csv
-import os
-import shutil
-import json
-import numpy as np
-from loguru import logger
+import segmentation_models_pytorch as smp
+import torch.nn as nn
 import torch
 import torch.optim as optim
-import torch.nn as nn
+from loguru import logger
+import numpy as np
+import os
+import copy
+
 from model import SMPUnet
 from dataset import MLFluvDataset
 from interface import MLFluvUnetInterface
 from weight_calculator import get_class_weight
+from utils import parse_config_params
 
-
-def parse_config_params(config_file):
-    with open(config_file, 'r') as f:
-        config_params = json.load(f)
-    return config_params
 
 
 if __name__ == "__main__":
 
-    ####################################
-    # PARSE CONFIG FILE
-    ####################################
-    config_params = parse_config_params('config.json')
+    exp_folder = './experiments/100'
+    output_folder = os.path.join(exp_folder, 'preds')
+    os.makedirs(output_folder, exist_ok=True)
+
+    SHOW_PLOTS = False
+
+    # TODO Add logger functions
+
+    config_params = parse_config_params(os.path.join(exp_folder, 'config.json'))
 
     log_num = config_params["trainer"]["log_num"]
     in_channels = config_params["trainer"]["in_channels"]
-    num_classes = config_params["trainer"]["classes"]
+    classes = config_params["trainer"]["classes"]
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
-    batch_size = config_params["trainer"]["batch_size"]
-    window_size = config_params["trainer"]["window_size"]
-    weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
+    batch_size = config_params["trainer"]["batch_size"]
+    weight_func = config_params["model"]["weights"]
+    window_size = config_params["trainer"]["window_size"]
     temperature = config_params["model"]['temperature']
     weights_path = config_params["model"]['weights_path']
-    distill_lamda = config_params["model"]['distill_lamda']
-
-    print(f"Train for log {log_num}")
-
-    # LOGGING
-
-    logger.add(f'experiments/{config_params["trainer"]["log_num"]}/info.log')
-    # writer = SummaryWriter(f'./experiments/{log_num}/tensorboard')
-
-    os.makedirs(f'./experiments/{log_num}', exist_ok=True)
-    os.makedirs(f'./experiments/{log_num}/checkpoints', exist_ok=True)
-
-    shutil.copy('config.json', os.path.join(f'./experiments/{log_num}', 'config.json'))
-    shutil.copy(f'dataset.py', os.path.join(f'./experiments/{log_num}', f'dataset.py'))
-    shutil.copy(f'train.py', os.path.join(f'./experiments/{log_num}', f'train.py'))
-
-    # MODEL PARAMS
+    freeze_encoder = config_params["model"]['freeze_encoder']
 
     ENCODER = config_params['model']['encoder']
-    # ENCODER_WEIGHTS = 'imagenet' #None
-    # ACTIVATION = None  # could be None for logits (binary) or 'softmax2d' for multicalss segmentation
-
-    device = torch.device(device if torch.cuda.is_available() else "cpu")
-    print(f"Using {device} device")
-
-    model = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=6)
-    # print(model)
+    ENCODER_WEIGHTS = None
+    ACTIVATION = None
+    
+    # create an untrained model, with one extra class in num_classes
+    old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=7, num_valid_classes=6, encoder_freeze=freeze_encoder)
 
     train_set = MLFluvDataset(
-        data_path=config_params['data_loader']['args']['data_paths'],
+        config_params['data_loader']['args']['data_paths'],
         mode='train',
+        label='hand',
         folds = [0, 1, 2, 3],
-        window=window_size,
-        label='auto',
-        one_hot_encode=False
+        one_hot_encode=False      
     )
 
     val_set = MLFluvDataset(
-        data_path=config_params['data_loader']['args']['data_paths'],
+        config_params['data_loader']['args']['data_paths'],
         mode='val',
+        label='hand',
         folds = [4],
-        window=window_size, 
-        label='auto',
-        one_hot_encode=False
+        one_hot_encode=False      
     )
+    
+    # load pretrain model weights
+    checkpoint_path = os.path.join(exp_folder, 'checkpoints', os.listdir(os.path.join(exp_folder, 'checkpoints'))[0])
+    old_net.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    old_net.eval()
+    
+    # Create new UNet by copying the old Unet
+    new_net = copy.deepcopy(old_net)
+    new_net.num_valid_classes = 7
 
     # Use saved weights for loss function, if the weights are pre-calculated 
     if os.path.isfile(weights_path):
@@ -113,12 +102,10 @@ if __name__ == "__main__":
             force_reload=False
         )
 
-    # criterion = smp.losses.DiceLoss(mode='multiclass')
-    
-    optimiser = optim.Adam(model.parameters(), lr=lr)
+    optimiser = optim.Adam(new_net.parameters(), lr=lr)
 
     interface = MLFluvUnetInterface(
-        model=model,
+        model=new_net,
         data_train=train_set,
         data_val=val_set,
         loss_fn=criterion,
@@ -126,7 +113,8 @@ if __name__ == "__main__":
         device=device,
         batch_size=batch_size,
         log_num=log_num,
-        distill_lamda = 0,
+        distill_lamda=0.5,
+        old_model=old_net
     )
     
     interface.train(epochs=epochs, eval_interval=5)

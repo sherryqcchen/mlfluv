@@ -1,0 +1,26 @@
+{
+    "model": {
+      "encoder": "resnet34",
+      "weights": "inverse_count",
+      "weights_path": "inverse_log_weights_small_sample.csv",
+      "loss_function": "CrossEntropyLoss",
+      "temperature": 1
+    },
+    "data_loader": {
+      "name": "MLFluvDataset",
+      "args": {
+        "data_paths":"/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds"
+      }
+    },
+    "trainer": {
+      "log_num": 100,
+      "window_size":512,
+      "epochs": 200,
+      "in_channels": 15,
+      "classes": 6,
+      "device": "cuda",
+      "learning_rate": 0.0001,
+      "batch_size": 8,
+      "exp_folder": "./experiments"
+    }
+  }
