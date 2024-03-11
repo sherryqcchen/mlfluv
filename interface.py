@@ -73,7 +73,7 @@ class MLFluvUnetInterface():
 
         self.criterion = loss_fn
         self.optimiser = optimiser
-        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimiser, mode='min', factor=0.1, patience=20)
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimiser, mode='min', factor=0.1, patience=10)
 
         self.batch_size = batch_size
         self.num_classes = self.model.num_classes
@@ -135,17 +135,16 @@ class MLFluvUnetInterface():
                 # Distillation loss
                 y_old = self.old_model(X_batch) # [batch_size, num_classes, image_height, image_width]
                 mask = y_batch < self.old_model.num_valid_classes # [batch_size, 1, image_height, image_width]
-                mask = torch.broadcast_to(mask, (mask.shape[0], self.num_classes, mask.shape[1], mask.shape[2]))
+                mask = torch.broadcast_to(mask.unsqueeze(1), (mask.shape[0], self.num_classes, mask.shape[1], mask.shape[2]))
                 
-                y_old[torch.logical_not(mask)] = -torch.inf
-                probabilities_old = torch.softmax(y_old, dim=1) # <--- old probablitliy
+                y_old[torch.logical_not(mask)] = -1e20 # -torch.inf triggers exponentiation operation overflows, so we use -1e20 instead
+                probabilities_old = nn.functional.softmax(y_old, dim=1) # <--- old probablitliy
 
                 y_new = self.old_model.apply_mask(y_pred, self.old_model.num_valid_classes)
-                y_new = y_new / self.model.temperature
-                probabilities_new = torch.softmax(y_new, dim=1) # < --- new probability
+                y_new = y_new / self.model.temperature 
+                probabilities_new = nn.functional.softmax(y_new, dim=1) # < --- new probability
 
                 loss_distill = self.criterion(probabilities_old, probabilities_new)
-                
                 loss_total = (1-self.distill_lamda) * loss_ce + self.distill_lamda * loss_distill
             else:
                 loss_total = loss_ce
@@ -217,14 +216,14 @@ class MLFluvUnetInterface():
                     # Distillation loss
                     y_old = self.old_model(X_batch) # [batch_size, num_classes, image_height, image_width]
                     mask = y_batch < self.old_model.num_valid_classes # [batch_size, 1, image_height, image_width]
-                    mask = torch.broadcast_to(mask, (mask.shape[0], self.num_classes, mask.shape[1], mask.shape[2]))
+                    mask = torch.broadcast_to(mask.unsqueeze(1), (mask.shape[0], self.num_classes, mask.shape[1], mask.shape[2]))
                     
-                    y_old[torch.logical_not(mask)] = -torch.inf
-                    probabilities_old = torch.softmax(y_old, dim=1) # <--- old probablitliy
+                    y_old[torch.logical_not(mask)] = -1e20 #-torch.inf
+                    probabilities_old = nn.functional.softmax(y_old, dim=1) # <--- old probablitliy
 
                     y_new = self.old_model.apply_mask(y_val_pred, self.old_model.num_valid_classes)
                     y_new = y_new / self.model.temperature
-                    probabilities_new = torch.softmax(y_new, dim=1) # < --- new probability
+                    probabilities_new = nn.functional.softmax(y_new, dim=1) # < --- new probability
 
                     loss_distill = self.criterion(probabilities_old, probabilities_new)
                     
@@ -266,7 +265,7 @@ class MLFluvUnetInterface():
         if val_miou >= self.best_val_miou:
             self.best_val_miou = val_miou
             self.best_val_epoch = epoch_idx
-            torch.save(self.model.state_dict(), f'./experiments/{self.log_num}/checkpoints/best_model.pth')
+            torch.save(self.model.model.state_dict(), f'./experiments/{self.log_num}/checkpoints/best_model.pth')
             logger.info(f'\n\nSaved new model at epoch {epoch_idx}!\n\n')
 
         logger.info(f"EPOCH: {epoch_idx} (validating)")
@@ -291,7 +290,7 @@ class MLFluvUnetInterface():
             if epoch % eval_interval == 0:
                 self.eval(self.dataloader_val,epoch)
                 # TODO how to arrage logging functions to be here
-                logger.info(f'Best micro IoU: {self.best_val_miou} at epoch {self.best_val_epoch}')
+                logger.info(f'Best mean IoU: {self.best_val_miou} at epoch {self.best_val_epoch}')
             self.writer.close()
 
 

@@ -11,7 +11,7 @@ def parse_config_params(config_file):
         config_params = json.load(f)
     return config_params
 
-def get_class_weight(dataset, weight_func='inverse_log'):
+def get_class_weight(dataset, weight_func='inverse_log', suffix=None):
         # get weights based on the pixel count of each class in train set 
         # calculation refer to a post: 
         # https://medium.com/gumgum-tech/handling-class-imbalance-by-introducing-sample-weighting-in-the-loss-function-3bdebd8203b4
@@ -28,6 +28,7 @@ def get_class_weight(dataset, weight_func='inverse_log'):
         num_classes = len(classes)
 
         class_percent = frequencies / pixel_sum
+        print(f"class percent: {class_percent}")
 
         if weight_func == 'inverse_log':
             weight = pixel_sum / (len(classes) * np.log(frequencies.astype(np.float64)))
@@ -41,22 +42,12 @@ def get_class_weight(dataset, weight_func='inverse_log'):
             print('No weight function is given. We use sklearn compute class weight function')
             weight = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=np.repeat(classes, frequencies))
 
-        # the weight for the last class (clouds and no data) is not needed, so it should be zero out.
-        # when merge crop class to grass, the classes has 7 elements, and the no data/cloud class is 6,
-        # not merging crop to grass, the no data class is 7.
-        if num_classes == 8 and 7 in classes:
-            # hand label without merging crop class
-            weight[-1] = 0
-        elif num_classes == 7 and 6 in classes:
-            # hand label after merging crop class or auto label without merging crop class
-            weight[-1] = 0
-        elif num_classes == 6 and 5 in classes:
-            # auto label after merging crop class
-            weight[-1] = 0
+        # the weight for the background class 0 (clouds, snow/ice and no data) is not needed, so it should be zero out.
+        weight[0] = 0
 
         print(classes)
 
-        with open(f"{weight_func}_weights.csv", 'w', newline='') as myfile:
+        with open(f"{weight_func}_weights{suffix}.csv", 'w', newline='') as myfile:
             wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
             wr.writerow(weight)
 
@@ -87,15 +78,14 @@ if __name__ == "__main__":
     mode='train',
     folds = [0, 1, 2, 3],
     window=window_size,
-    label='auto',
-    one_hot_encode=False,
-    merge_crop=True
+    label='hand',
+    one_hot_encode=False
     )
 
     if os.path.isfile(weights_path):
         class_weights = list(csv.reader(open(weights_path, "r"), delimiter=","))
         class_weights = np.array([float(i) for i in class_weights[0]])
     else:
-        class_weights = get_class_weight(train_set, weight_func=weight_func)
+        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix='_hand')
     print(class_weights)
 

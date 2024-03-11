@@ -4,7 +4,7 @@ import segmentation_models_pytorch as smp
 from weight_calculator import get_class_weight
 
 class SMPUnet(torch.nn.Module):
-    def __init__(self, encoder_name="resnet34", in_channels=15, num_classes=7, num_valid_classes=6, encoder_freeze=False, temperature=0.0):
+    def __init__(self, encoder_name="resnet34", in_channels=15, num_classes=7, num_valid_classes=6, encoder_freeze=False, temperature=1.0):
         """
         Initialize the U-Net model using SMP unet model.
 
@@ -28,11 +28,14 @@ class SMPUnet(torch.nn.Module):
         self.num_valid_classes = num_valid_classes
         self.num_classes = num_classes
         self.temperature = temperature
+        
+        if self.temperature == 0.0:
+            print("You cannot do knowledge distillation when temperature is set to 0.")
 
         # TODO: What is the difference of doing with set encoder_freeze=True in smp.Unet()
         # Freeze encoder
         if encoder_freeze==True:
-            self.encoder_freeze()
+            self.freeze_encoder()
     
     def load_state_dict(self, state_dict):
         
@@ -77,14 +80,13 @@ class SMPUnet(torch.nn.Module):
         
         logits = self.model(*args, **kwargs) # [batch_size, n_classes, image_height, image_width]
         logits = self.apply_mask(logits, self.num_valid_classes)
-
-        # if self.temperature != 0.0:
-        #     logits = logits / self.temperature
         
         return logits
 
 
 """
+Method to freeze encoder
+
 method 1
 model = SMPUnet(..., freeze_encoder=True)
 

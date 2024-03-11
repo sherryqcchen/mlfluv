@@ -26,6 +26,7 @@ experiments/
 # Ignore IDE-specific files
 .vscode/
 .idea/
+.db
 
 # Ignore image files
 *.tif

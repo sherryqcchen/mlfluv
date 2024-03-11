@@ -20,8 +20,8 @@ from utils import parse_config_params
 if __name__ == "__main__":
 
     exp_folder = './experiments/100'
-    output_folder = os.path.join(exp_folder, 'preds')
-    os.makedirs(output_folder, exist_ok=True)
+    # output_folder = os.path.join(exp_folder, 'preds')
+    # os.makedirs(output_folder, exist_ok=True)
 
     SHOW_PLOTS = False
 
@@ -31,12 +31,12 @@ if __name__ == "__main__":
 
     log_num = config_params["trainer"]["log_num"]
     in_channels = config_params["trainer"]["in_channels"]
-    classes = config_params["trainer"]["classes"]
+    classes = 7 # config_params["trainer"]["classes"]
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
     loss_func = config_params["model"]['loss_function']
-    batch_size = config_params["trainer"]["batch_size"]
+    batch_size = 2 # config_params["trainer"]["batch_size"]
     weight_func = config_params["model"]["weights"]
     window_size = config_params["trainer"]["window_size"]
     temperature = config_params["model"]['temperature']
@@ -48,7 +48,9 @@ if __name__ == "__main__":
     ACTIVATION = None
     
     # create an untrained model, with one extra class in num_classes
-    old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=7, num_valid_classes=6, encoder_freeze=freeze_encoder)
+    old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=0.5)
+    print(f"{old_net.temperature=}")
+    print()
 
     train_set = MLFluvDataset(
         config_params['data_loader']['args']['data_paths'],
@@ -74,6 +76,7 @@ if __name__ == "__main__":
     # Create new UNet by copying the old Unet
     new_net = copy.deepcopy(old_net)
     new_net.num_valid_classes = 7
+    print(f"{new_net.temperature=}")
 
     # Use saved weights for loss function, if the weights are pre-calculated 
     if os.path.isfile(weights_path):
@@ -88,8 +91,8 @@ if __name__ == "__main__":
     if loss_func == "CrossEntropyLoss":
         criterion = nn.CrossEntropyLoss(reduction='mean',
                                         weight=weights,
-                                        label_smoothing=0.01, 
-                                        ignore_index=0)
+                                        label_smoothing=0.01) 
+                                        # ignore_index=0)
     elif loss_func == "FocalLoss":
         criterion = torch.hub.load(
             'adeelh/pytorch-multi-class-focal-loss',
@@ -113,7 +116,7 @@ if __name__ == "__main__":
         device=device,
         batch_size=batch_size,
         log_num=log_num,
-        distill_lamda=0.5,
+        distill_lamda=0.25,
         old_model=old_net
     )
     
