@@ -7,7 +7,7 @@ import plotter
 
 REMAP_HAND_LABEL = False
 
-data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/unlabelled_data'
+data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_10000_sample'
 
 point_path_list = glob.glob(os.path.join(data_path, '*'))
 print(f"The count of total downloaded data points: {len(point_path_list)}")
@@ -25,13 +25,10 @@ def remap_mask(mask_arr):
 
     return mask_arr
 
-for idx, point_path in enumerate(point_path_list[1:]):
+for idx, point_path in enumerate(point_path_list):
 
     point_id = os.path.basename(point_path)
-    print(f"{idx+1}: {point_id}")
-
-    # if point_id != '20200401T140051_20200401T140048_T21LWF_1272S5614W':
-    #     continue
+    print(f"{idx}: {point_id}")
 
     file_paths = [os.path.join(point_path, fname) for fname in os.listdir(point_path)]
     esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
@@ -60,7 +57,6 @@ for idx, point_path in enumerate(point_path_list[1:]):
 
     esawc_mask = remap_mask(esawc_arr)
     np.save(esawc_label_path, esawc_mask)
-
 
     if REMAP_HAND_LABEL:
         hand_path = [file for file in file_paths if file.endswith('hand.tif')][0]

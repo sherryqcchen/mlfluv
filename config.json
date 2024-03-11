@@ -15,7 +15,7 @@
       }
     },
     "trainer": {
-      "log_num": 1,
+      "log_num": 2,
       "window_size":512,
       "epochs": 100,
       "in_channels": 15,
