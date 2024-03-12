@@ -129,4 +129,4 @@ if __name__ == "__main__":
         distill_lamda = 0,
     )
     
-    interface.train(epochs=epochs, eval_interval=2)
+    interface.train(epochs=epochs, eval_interval=10)
