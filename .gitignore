@@ -31,7 +31,7 @@ experiments/
 # Ignore image files
 *.tif
 *.npy
-*.png
+# *.png
 *.jpeg
 
 # Ignore output json files
