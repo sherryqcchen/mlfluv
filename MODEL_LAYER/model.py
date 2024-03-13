@@ -1,8 +1,6 @@
 import torch
 import segmentation_models_pytorch as smp
 
-from weight_calculator import get_class_weight
-
 class SMPUnet(torch.nn.Module):
     def __init__(self, encoder_name="resnet34", in_channels=15, num_classes=7, num_valid_classes=6, encoder_freeze=False, temperature=1.0):
         """

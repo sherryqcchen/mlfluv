@@ -1,6 +1,6 @@
 # this script is for incremental learning 
 import csv
-import segmentation_models_pytorch as smp
+import json
 import torch.nn as nn
 import torch
 import torch.optim as optim
@@ -13,9 +13,12 @@ from model import SMPUnet
 from dataset import MLFluvDataset
 from interface import MLFluvUnetInterface
 from weight_calculator import get_class_weight
-from utils import parse_config_params
+# from utils import parse_config_params
 
-
+def parse_config_params(config_file):
+    with open(config_file, 'r') as f:
+        config_params = json.load(f)
+    return config_params
 
 if __name__ == "__main__":
 
@@ -25,7 +28,7 @@ if __name__ == "__main__":
 
     SHOW_PLOTS = False
 
-    # TODO Add logger functions
+    # TODO Add logger functions and save refined model
 
     config_params = parse_config_params(os.path.join(exp_folder, 'config.json'))
 

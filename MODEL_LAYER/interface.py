@@ -105,9 +105,9 @@ class MLFluvUnetInterface():
             os.makedirs(f'./experiments/{log_num}', exist_ok=True)
             os.makedirs(f'./experiments/{log_num}/checkpoints', exist_ok=True)
 
-            shutil.copy('config.json', os.path.join(f'./experiments/{log_num}', 'config.json'))
-            shutil.copy(f'dataset.py', os.path.join(f'./experiments/{log_num}', f'dataset.py'))
-            shutil.copy(f'train.py', os.path.join(f'./experiments/{log_num}', f'train.py'))
+            shutil.copy('MODEL_LAYER/config.json', os.path.join(f'./experiments/{log_num}', 'config.json'))
+            shutil.copy(f'MODEL_LAYER/dataset.py', os.path.join(f'./experiments/{log_num}', f'dataset.py'))
+            shutil.copy(f'MODEL_LAYER/train.py', os.path.join(f'./experiments/{log_num}', f'train.py'))
 
     def train_1epoch(self, epoch_idx):
         # train on one epoch and calculate train loss

@@ -9,6 +9,7 @@ from loguru import logger
 import torch
 import torch.optim as optim
 import torch.nn as nn
+
 from model import SMPUnet
 from dataset import MLFluvDataset
 from interface import MLFluvUnetInterface
@@ -26,7 +27,8 @@ if __name__ == "__main__":
     ####################################
     # PARSE CONFIG FILE
     ####################################
-    config_params = parse_config_params('config.json')
+    print(os.getcwd())
+    config_params = parse_config_params('MODEL_LAYER/config.json')
 
     log_num = config_params["trainer"]["log_num"]
     in_channels = config_params["trainer"]["in_channels"]
@@ -52,9 +54,9 @@ if __name__ == "__main__":
     os.makedirs(f'./experiments/{log_num}', exist_ok=True)
     os.makedirs(f'./experiments/{log_num}/checkpoints', exist_ok=True)
 
-    shutil.copy('config.json', os.path.join(f'./experiments/{log_num}', 'config.json'))
-    shutil.copy(f'dataset.py', os.path.join(f'./experiments/{log_num}', f'dataset.py'))
-    shutil.copy(f'train.py', os.path.join(f'./experiments/{log_num}', f'train.py'))
+    shutil.copy('MODEL_LAYER/config.json', os.path.join(f'./experiments/{log_num}', 'config.json'))
+    shutil.copy(f'MODEL_LAYER/dataset.py', os.path.join(f'./experiments/{log_num}', f'dataset.py'))
+    shutil.copy(f'MODEL_LAYER/train.py', os.path.join(f'./experiments/{log_num}', f'train.py'))
 
     # MODEL PARAMS
 
@@ -88,6 +90,7 @@ if __name__ == "__main__":
 
     # Use saved weights for loss function, if the weights are pre-calculated 
     if os.path.isfile(weights_path):
+        print(weights_path)
         class_weights = list(csv.reader(open(weights_path, "r"), delimiter=","))
         class_weights = np.array([float(i) for i in class_weights[0]])
     else:
