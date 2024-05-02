@@ -1,4 +1,9 @@
 import os
+import sys
+
+# Add the parent directory to the system path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
 import datetime
 import json
 import csv
@@ -12,8 +17,8 @@ import numpy.lib.recfunctions as rf
 import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy.interpolate import NearestNDInterpolator
-import gee_s1_ard.python_api.wrapper as wp
-import plotter
+from gee_s1_ard.python_api import wrapper as wp
+from UTILS import plotter
 
 S1_BANDS = ['VV', 'VH']
 S2_BANDS = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
@@ -207,19 +212,20 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
     coord_string = get_lat_lng_string(coords)
 
     aoi = ee_buffer_point(coords)
-    print(river_order)
+    # print(river_order)
 
-
-        # Filter from the first day to the last day of a given year 
-    start_date = ee.Date.fromYMD(year, 1, 1)
+    # Filter from the first day to the last day of a given year 
+    start_date = ee.Date.fromYMD(year,1, 1)
     end_date = start_date.advance(1, 'year')
 
     col_filter = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(start_date, end_date))
 
-        # Filter image collection from Google Dynamic World dataset, sentinel-1, sentinel-2
-    dw_col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(col_filter)
-    s1_col = ee.ImageCollection('COPERNICUS/S1_GRD').filter(col_filter)
-    s2_col = ee.ImageCollection('COPERNICUS/S2').filter(col_filter)
+    col_filter_for_sentinel = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(ee.Date.fromYMD(year,5, 1), start_date.advance(6, 'month')))
+
+    # Filter image collection from Google Dynamic World dataset, sentinel-1, sentinel-2
+    dw_col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(col_filter_for_sentinel)
+    s1_col = ee.ImageCollection('COPERNICUS/S1_GRD').filter(col_filter_for_sentinel)
+    s2_col = ee.ImageCollection('COPERNICUS/S2').filter(col_filter_for_sentinel)
     print(dw_col.size().getInfo())
 
         # DW is made on top of Sentinel-2, so they have the same system_index property and these two collections can be joined together 
@@ -363,7 +369,7 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
             point_id = s2_id + "_" + coord_string
 
             # data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
-            data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_10000_samples'
+            data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_sediment_rich_samples'
             point_path = os.path.join(data_path, point_id) 
 
             if not os.path.exists(point_path):
@@ -426,19 +432,23 @@ if __name__ == "__main__":
     year = 2020
 
     # Buffer the point to a rectangle called aoi with 2048*2048 size
-    points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_da_order_10000_sample.csv')
+    points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_sediment_rich_sample.csv')
     
     point_list = []
+
+    # Specify the encoding if needed (e.g., utf-8, latin-1, utf-16)
+    # encoding = 'utf-16'
     with open(points_path, 'r') as file:
         csv_reader = csv.DictReader(file)
         for row in csv_reader:
-            coord = tuple([float(row['x']), float(row['y'])])
+            # coord = tuple([float(row['x']), float(row['y'])])
+            coord = tuple(float(x.strip('\'"')) for x in row['coordinates'].strip('()').split(','))
             riv_order = int(float(row['riv_order']))
             da = float(row['upland_drainage_area'])
             point_list.append((coord,riv_order, da))
 
     # print(point_list)
-    for idx, (point, riv_ord, da) in enumerate(point_list[1241:]):
+    for idx, (point_coord, riv_ord, da) in enumerate(point_list):
 
-        print(f"{idx+1241}: {point}")
-        download_1_point_data(point, riv_ord, da)
+        print(f"{idx}: {point_coord}")
+        download_1_point_data(point_coord, riv_ord, da, VIS_OPTION=False)

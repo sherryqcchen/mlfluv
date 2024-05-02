@@ -4,18 +4,21 @@
 # Filter out all the ESRI labels that contains water pixels. We use these labels as the starting point to make hand labels.
 # Convert S1, S2 and ESRI label from npy files to tif files, so that they can be opened in QGIS. 
 # Fowllowing this script, download Planet images for the same aoi, create hand labels by fixing ESRI labels in QGIS (usnig Thrase plugin).
+import os
+import sys
 
+# Add the parent directory to the system path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import shutil
 import glob
-import os
 import json
 import geojson
 import numpy as np
 import pandas as pd
 import rioxarray
 import xarray as xr
-import plotter
+from UTILS import plotter
 
 import rasterio
 from rasterio.transform import from_origin
@@ -129,10 +132,11 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
 
 if __name__=='__main__':
 
-    PLOT_DATA = False
+    PLOT_DATA = True
     CONVERT_TO_TIFF = True
 
-    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_10000_sample'
+    # data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_10000_sample'
+    data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_sediment_rich_samples'
     
     point_path_list = glob.glob(os.path.join(data_path, '*'))
     print(f"The count of total downloaded data points: {len(point_path_list)}")
@@ -196,7 +200,7 @@ if __name__=='__main__':
     print(f"The count of data points that have water and bare pixels: {len(water_point_path)}")
 
     # The path for storing the data with both water and bare pixels
-    dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_10000_sample'
+    dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_sediment_rich_sample'
     
     for path in water_point_path:    
 
