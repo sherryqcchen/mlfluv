@@ -42,7 +42,7 @@ def get_bounding_box(coord_list):
     ymax = coords[:, 1].max() # maximum latitude
     return xmin, xmax, ymin, ymax
 
-def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
+def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, remap_to_sedi=False):
     """
     Convert numpy ndarray from .npy file to tiff for visualization and labelling.
 
@@ -94,7 +94,7 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
                 
     elif which_data == 's1':
         # Select VV band (assuming 0-based indexing)
-        vv_data = s1_arr[:, :, 0]
+        vv_data = arr[:, :, 0]
         # Write the VV NumPy array to a GeoTIFF file
         with rasterio.open(
                 out_path,
@@ -113,6 +113,10 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir):
     else:
         # For all kinds or labels with dimensions [length, width, 1]
         # Write the label Numpy array to a TIFF file
+
+        if remap_to_sedi:
+            # remap bare class in the label to sediment class
+            arr = np.where(arr==5, 6, arr)
 
         label = arr #.squeeze()
         with rasterio.open(
@@ -169,7 +173,7 @@ if __name__=='__main__':
         esri_arr = np.load(esri_label_path)
         glc10_arr = np.load(glc10_label_path)
         dw_arr = np.load(dw_label_path)
-        esawc_arr = np.load(esawc_label_path)
+        esawc_arr = np.load(esawc_label_path) 
 
         s1_arr = np.load(s1_path)
         s2_arr = np.load(s2_path)
@@ -191,27 +195,40 @@ if __name__=='__main__':
             meta_df = pd.read_csv(meta_path)
             plotter.plot_full_data(s1_arr, s2_arr, esri_arr, esawc_arr, dw_arr, glc10_arr, meta_df, True, point_id)
         
-        # Check if ESRI label has any water pixel (its pixel value is 0)
-        if np.isin(esri_arr, 0).any():
-            water_point_path.append(point_path)
+        # Check if Dynamic earth label has any bare pixel (its pixel value is 5, they will be converted to sediment pixels later)
+        if np.isin(dw_arr, 5).any():
+            fluvial_point_path.append(point_path)
 
 
     # copy a list of folders with water pixels to a new directory       
-    print(f"The count of data points that have water and bare pixels: {len(water_point_path)}")
+    print(f"The count of data points that have water and bare pixels: {len(fluvial_point_path)}")
 
-    # The path for storing the data with both water and bare pixels
+    # Export a list of flivial points path to txt file
+    fluvial_point_paths = [path + '\n' for path in fluvial_point_path]
+    with open('DATA_LAYER/sediment_rich_fluvial_points.txt', 'w') as f:
+        f.writelines(fluvial_point_paths)
+
+
+    # The path for storing the data with bare pixels (potential sediment pixels)
     dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_sediment_rich_sample'
     
-    for path in water_point_path:    
+    with open('DATA_LAYER/sediment_rich_fluvial_points.txt', 'r') as f:
+        paths = f.readlines()
+
+    # Remove the newline character from each path
+    move_paths = [path.strip() for path in paths]
+
+    for path in move_paths:    
 
         water_point_id = os.path.basename(path)
 
         file_paths = [os.path.join(path, fname) for fname in os.listdir(path)]
 
+        dw_label_path = [file for file in file_paths if file.endswith('DW.npy')][0]
         esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
 
-        s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
-        s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]
+        s1_fluv_path = [file for file in file_paths if file.endswith('S1.npy')][0]
+        s2_fluv_path = [file for file in file_paths if file.endswith('S2.npy')][0]
 
         meta_path = [file for file in file_paths if file.endswith('.csv')][0]
 
@@ -222,9 +239,10 @@ if __name__=='__main__':
         
         # Convert Sentinel-1&2 and ESRI label to tiff and write out in the new fluvial directory
         if CONVERT_TO_TIFF:
-            convert_npy_to_tiff(s1_path, 's1', meta_path, new_path)
-            convert_npy_to_tiff(s2_path, 's2', meta_path, new_path)
-            convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path)     
+            convert_npy_to_tiff(s1_fluv_path, 's1', meta_path, new_path)
+            convert_npy_to_tiff(s2_fluv_path, 's2', meta_path, new_path)
+            convert_npy_to_tiff(dw_label_path, 'label', meta_path, new_path, remap_to_sedi=True)   
+            convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path, remap_to_sedi=True)  
 
         for fname in os.listdir(path):
             file_path = os.path.join(path, fname)
@@ -238,6 +256,7 @@ if __name__=='__main__':
 
         file_paths = [os.path.join(path, fname) for fname in os.listdir(path)]
 
+        dw_label_path = [file for file in file_paths if file.endswith('DW.npy')][0]
         esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
         s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
         s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]
@@ -248,9 +267,10 @@ if __name__=='__main__':
         if PLOT_DATA:
             s1_arr = np.load(s1_path)
             s2_arr = np.load(s2_path)
+            dw_arr = np.load(dw_label_path)
             meta_df = pd.read_csv(meta_path)
 
-            plotter.plot_s12label(s1_arr, s2_arr, esri_arr, meta_df, True, point_id)
+            plotter.plot_s12label(s1_arr, s2_arr, dw_arr, meta_df, True, point_id)
 
     
 
