@@ -220,7 +220,7 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
 
     col_filter = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(start_date, end_date))
 
-    col_filter_for_sentinel = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(ee.Date.fromYMD(year,5, 1), start_date.advance(6, 'month')))
+    col_filter_for_sentinel = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(ee.Date.fromYMD(year,9, 1), ee.Date.fromYMD(year,11, 1)))
 
     # Filter image collection from Google Dynamic World dataset, sentinel-1, sentinel-2
     dw_col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(col_filter_for_sentinel)
@@ -451,4 +451,10 @@ if __name__ == "__main__":
     for idx, (point_coord, riv_ord, da) in enumerate(point_list):
 
         print(f"{idx}: {point_coord}")
-        download_1_point_data(point_coord, riv_ord, da, VIS_OPTION=False)
+        try:
+            download_1_point_data(point_coord, riv_ord, da, VIS_OPTION=False)
+        except ee.ee_exception.EEException as err:
+            print("An EEException occurred:", err)
+            print('No valid clear data found within the given time range')
+            continue
+
