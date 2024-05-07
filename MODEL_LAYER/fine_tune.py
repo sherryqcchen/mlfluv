@@ -1,6 +1,7 @@
 # this script is for incremental learning 
 import csv
 import json
+import pandas as pd
 import torch.nn as nn
 import torch
 import torch.optim as optim
@@ -22,7 +23,7 @@ def parse_config_params(config_file):
 
 if __name__ == "__main__":
 
-    exp_folder = './experiments/100'
+    exp_folder = './experiments/1001'
     # output_folder = os.path.join(exp_folder, 'preds')
     # os.makedirs(output_folder, exist_ok=True)
 
@@ -43,20 +44,20 @@ if __name__ == "__main__":
     weight_func = config_params["model"]["weights"]
     window_size = config_params["trainer"]["window_size"]
     temperature = config_params["model"]['temperature']
-    weights_path = config_params["model"]['weights_path']
     freeze_encoder = config_params["model"]['freeze_encoder']
 
     ENCODER = config_params['model']['encoder']
     ENCODER_WEIGHTS = None
     ACTIVATION = None
+
+    weights_path = f"MODEL_LAYER/{weight_func}_weights_hand.csv"
     
     # create an untrained model, with one extra class in num_classes
     old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=0.5)
     print(f"{old_net.temperature=}")
-    print()
 
     train_set = MLFluvDataset(
-        config_params['data_loader']['args']['data_paths'],
+        config_params['data_loader']['args']['tune_paths'],
         mode='train',
         label='hand',
         folds = [0, 1, 2, 3],
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     )
 
     val_set = MLFluvDataset(
-        config_params['data_loader']['args']['data_paths'],
+        config_params['data_loader']['args']['tune_paths'],
         mode='val',
         label='hand',
         folds = [4],
@@ -83,10 +84,10 @@ if __name__ == "__main__":
 
     # Use saved weights for loss function, if the weights are pre-calculated 
     if os.path.isfile(weights_path):
-        class_weights = list(csv.reader(open(weights_path, "r"), delimiter=","))
-        class_weights = np.array([float(i) for i in class_weights[0]])
+        df = pd.read_csv(weights_path)
+        class_weights = df['Weights']
     else:
-        class_weights = get_class_weight(train_set, weight_func=weight_func)
+        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix='hand')
     print(class_weights)
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 

@@ -172,18 +172,12 @@ class MLFluvDataset(Dataset):
         data_paths = self.data[index]
 
         # if the input data is changed, go to split_data.py to check the new orders of s1, s2 and labels
+        s1_path = [path for path in data_paths if path.endswith('S1.npy')][0]
+        s2_path = [path for path in data_paths if path.endswith('S2.npy')][0]
+        auto_mask = [path for path in data_paths if path.endswith('ESRI.npy') or path.endswith('DW.npy')][0]
+
         if len(data_paths) == 4:
-            s1_path = data_paths[2]
-            s2_path = data_paths[3]
-
-            auto_mask = data_paths[0]
-            hand_mask = data_paths[1]
-
-        elif len(data_paths)==3:
-            s1_path = data_paths[1]
-            s2_path = data_paths[2]  
-
-            auto_mask = data_paths[0]    
+            hand_mask = [path for path in data_paths if path.endswith('hand.tif')][0]   
 
         s1_arr = np.load(s1_path) # shape [h, w, band], band=2
         s2_arr = np.load(s2_path) # shape [h, w, band], band=13
