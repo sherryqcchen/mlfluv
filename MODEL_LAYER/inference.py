@@ -1,16 +1,23 @@
+import os
+import sys
+
+# Add the parent directory to the system path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
 import cv2
 import torch
 from loguru import logger
 import numpy as np
-import os
 import segmentation_models_pytorch as smp
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torchmetrics import JaccardIndex
 
 from dataset import MLFluvDataset
-from utils import parse_config_params, extract_patches, reconstruct_from_patches
-from plotter import plot_inference_result
+from UTILS.utils import parse_config_params, extract_patches, reconstruct_from_patches
+from UTILS.plotter import plot_inference_result
+
+
 
 
 def infer_with_patches(img, net, config_params, preprocess_fn=None):
@@ -62,7 +69,7 @@ def infer_with_patches(img, net, config_params, preprocess_fn=None):
     return probs
 
 if __name__ == '__main__':
-    exp_folder = './experiments/10'
+    exp_folder = './experiments/1001'
     output_folder = os.path.join(exp_folder, 'preds')
     os.makedirs(output_folder, exist_ok=True)
 
@@ -100,7 +107,7 @@ if __name__ == '__main__':
                      ).to(device)
 
     test_set = MLFluvDataset(
-        config_params['data_loader']['args']['data_paths'],
+        config_params['data_loader']['args']['train_paths'],
         mode='test',
         label='auto',
         folds = [4],

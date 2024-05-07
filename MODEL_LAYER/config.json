@@ -1,8 +1,7 @@
 {
     "model": {
       "encoder": "resnet34",
-      "weights": "inverse_count",
-      "weights_path": "inverse_count_weights.csv",
+      "weights": "inverse_log",
       "loss_function": "CrossEntropyLoss",
       "temperature": 1,
       "distill_lamda": 0,
@@ -10,19 +9,21 @@
     },
     "data_loader": {
       "name": "MLFluvDataset",
+      "label": "auto",
       "args": {
-        "data_paths":"/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_auto"
+        "train_paths":"/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_sedi",
+        "tune_paths":"/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_sedi_hand"
       }
     },
     "trainer": {
-      "log_num": 2,
+      "log_num": 0,
       "window_size":512,
-      "epochs": 100,
+      "epochs": 50,
       "in_channels": 15,
       "classes": 6,
       "device": "cuda",
       "learning_rate": 0.0001,
-      "batch_size": 16,
+      "batch_size": 8,
       "exp_folder": "./experiments"
     }
   }

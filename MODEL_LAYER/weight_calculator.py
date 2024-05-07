@@ -1,6 +1,7 @@
 import csv
 import os
 import numpy as np
+import pandas as pd
 import json
 import sklearn
 
@@ -11,7 +12,7 @@ def parse_config_params(config_file):
         config_params = json.load(f)
     return config_params
 
-def get_class_weight(dataset, weight_func='inverse_log', suffix=None):
+def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
         # get weights based on the pixel count of each class in train set 
         # calculation refer to a post: 
         # https://medium.com/gumgum-tech/handling-class-imbalance-by-introducing-sample-weighting-in-the-loss-function-3bdebd8203b4
@@ -47,11 +48,22 @@ def get_class_weight(dataset, weight_func='inverse_log', suffix=None):
 
         print(classes)
 
-        with open(f"{weight_func}_weights{suffix}.csv", 'w', newline='') as myfile:
-            wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
-            wr.writerow(weight)
+        # Create a DataFrame from the weights per class
+        df = pd.DataFrame({'Class': classes, 'Weights': weight})
 
-        return weight
+        # Create a complete list of class values
+        complete_class_values = list(range(min(classes), max(classes) + 1))
+
+        # Create a new DataFrame with complete class values
+        complete_df = pd.DataFrame({'Class': complete_class_values})
+
+        # Merge the two DataFrames and fill missing weights with 0
+        df = pd.merge(complete_df, df, on='Class', how='left').fillna(0)
+
+        # Save to CSV
+        df.to_csv(f'MODEL_LAYER/{weight_func}_weights_{suffix}.csv', index=False)
+
+        return df['Weights']
 
 
 if __name__ == "__main__":
@@ -59,7 +71,7 @@ if __name__ == "__main__":
     ####################################
     # PARSE CONFIG FILE
     ####################################
-    config_params = parse_config_params('config.json')
+    config_params = parse_config_params('MODEL_LAYER/config.json')
 
     log_num = config_params["trainer"]["log_num"]
     in_channels = config_params["trainer"]["in_channels"]
@@ -71,14 +83,17 @@ if __name__ == "__main__":
     window_size = config_params["trainer"]["window_size"]
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
-    weights_path = config_params["model"]['weights_path']
+    label_mode = config_params['data_loader']['label']
+    
+
+    weights_path = f"{weight_func}_weights_{label_mode}.csv"
 
     train_set = MLFluvDataset(
     data_path=config_params['data_loader']['args']['data_paths'],
     mode='train',
     folds = [0, 1, 2, 3],
     window=window_size,
-    label='hand',
+    label=label_mode,
     one_hot_encode=False
     )
 
@@ -86,6 +101,6 @@ if __name__ == "__main__":
         class_weights = list(csv.reader(open(weights_path, "r"), delimiter=","))
         class_weights = np.array([float(i) for i in class_weights[0]])
     else:
-        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix='_hand')
+        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=label_mode)
     print(class_weights)
 

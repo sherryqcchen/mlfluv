@@ -197,8 +197,9 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
     year = meta_info['year'][0]
     river_order = meta_info['riv_order'][0]
     da = meta_info['drainage_area'][0]
+    date = meta_info['s2_date'][0]
 
-    meta_str = f"Images for {point_coords} in {year}.\n River order: {river_order}, upland drainage area: {da} km \u00B2."
+    meta_str = f"Images at {date} for {point_coords} in {year}.\n River order: {river_order}, upland drainage area: {da} km \u00B2."
 
     fig.text(0.15, 0.95, meta_str, fontsize=20)
 
@@ -215,7 +216,7 @@ def plot_inference_result(sentinel2_rgb_image, sentinel1_vv_image, label_image, 
     mpl.rcParams.update({'font.size': 20})
 
     # Define custom colors for each class
-    colors = ['blue', 'darkgreen', 'lightyellow', 'red', 'gray', 'black']
+    colors = ['black', 'darkgreen', 'lightyellow', 'blue','red', 'gray']
 
     # Create a custom color map using ListedColormap
     custom_cmap = ListedColormap(colors)

@@ -6,6 +6,7 @@ import shutil
 import json
 import numpy as np
 from loguru import logger
+import pandas as pd
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -41,8 +42,11 @@ if __name__ == "__main__":
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
     temperature = config_params["model"]['temperature']
-    weights_path = config_params["model"]['weights_path']
     distill_lamda = config_params["model"]['distill_lamda']
+
+    label_mode = config_params['data_loader']['label']
+
+    weights_path = f"MODEL_LAYER/{weight_func}_weights_{label_mode}.csv"
 
     print(f"Train for log {log_num}")
 
@@ -67,33 +71,33 @@ if __name__ == "__main__":
     device = torch.device(device if torch.cuda.is_available() else "cpu")
     print(f"Using {device} device")
 
-    model = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=6)
+    model = SMPUnet(encoder_name=ENCODER, in_channels=15, num_classes=6)
     # print(model)
 
     train_set = MLFluvDataset(
-        data_path=config_params['data_loader']['args']['data_paths'],
+        data_path=config_params['data_loader']['args']['train_paths'],
         mode='train',
         folds = [0, 1, 2, 3],
         window=window_size,
-        label='auto',
+        label=label_mode,
         one_hot_encode=False
     )
 
     val_set = MLFluvDataset(
-        data_path=config_params['data_loader']['args']['data_paths'],
+        data_path=config_params['data_loader']['args']['train_paths'],
         mode='val',
         folds = [4],
         window=window_size, 
-        label='auto',
+        label=label_mode,
         one_hot_encode=False
     )
 
     # Use saved weights for loss function, if the weights are pre-calculated 
     if os.path.isfile(weights_path):
-        print(weights_path)
-        class_weights = list(csv.reader(open(weights_path, "r"), delimiter=","))
-        class_weights = np.array([float(i) for i in class_weights[0]])
+        df = pd.read_csv(weights_path)
+        class_weights = df['Weights']
     else:
+        print('Going to calculate weight now..')
         class_weights = get_class_weight(train_set, weight_func=weight_func)
     print(class_weights)
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
