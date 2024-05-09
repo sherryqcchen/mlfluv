@@ -216,7 +216,7 @@ def plot_inference_result(sentinel2_rgb_image, sentinel1_vv_image, label_image, 
     mpl.rcParams.update({'font.size': 20})
 
     # Define custom colors for each class
-    colors = ['black', 'darkgreen', 'lightyellow', 'blue','red', 'gray']
+    colors = ['black', 'darkgreen', 'lightyellow', 'blue','red', 'gray','orange']
 
     # Create a custom color map using ListedColormap
     custom_cmap = ListedColormap(colors)
