@@ -54,11 +54,19 @@ class MLFluvUnetInterface():
         device,
         batch_size,
         log_num,
+        mode='initial_train',
         distill_lamda=0,
         old_model=None,
     ):
         self.device = device
         self.model = model.to(device)
+        self.log_num = log_num
+        self.mode = mode
+
+        if self.mode == "initial_train":
+            self.best_model_path = f'./experiments/{self.log_num}/checkpoints/best_model.pth'
+        else:
+            self.best_model_path = f'./experiments/{self.log_num}/{self.mode}/checkpoints/best_model.pth'
 
         self.old_model = old_model
 
@@ -90,7 +98,7 @@ class MLFluvUnetInterface():
 
         self.writer =  SummaryWriter()    
 
-        self.log_num = log_num
+
 
         self.losses_train = []
         self.losses_val = []
@@ -265,7 +273,7 @@ class MLFluvUnetInterface():
         if val_miou >= self.best_val_miou:
             self.best_val_miou = val_miou
             self.best_val_epoch = epoch_idx
-            torch.save(self.model.model.state_dict(), f'./experiments/{self.log_num}/checkpoints/best_model.pth')
+            torch.save(self.model.model.state_dict(), self.best_model_path)
             logger.info(f'\n\nSaved new model at epoch {epoch_idx}!\n\n')
 
         logger.info(f"EPOCH: {epoch_idx} (validating)")

@@ -122,7 +122,7 @@ if __name__ == '__main__':
     model.eval()
 
     # calculate IoU
-    test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=6, average='none').to(device)
+    test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
 
     for i, (image, mask) in enumerate(test_loader):
         image, mask = image.to(device), mask.to(device)
