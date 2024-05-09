@@ -184,8 +184,12 @@ def order_100_data(path_list):
         geometry["type"] = "Polygon"
         geometry["coordinates"] = aoi_coords
 
-
-        s2_date = datetime.date.fromisoformat(meta_df['s2_date'][0])
+        try:
+            s2_date = datetime.date.fromisoformat(meta_df['s2_date'][0])
+        except ValueError as err:
+            print(err)
+            print("Re-formatting the date string...")
+            s2_date = datetime.date.fromisoformat(datetime.datetime.strptime(meta_df['s2_date'][0], '%m/%d/%Y').strftime('%Y-%m-%d'))
 
         date_start = s2_date
         date_end = s2_date + datetime.timedelta(days=1)
@@ -292,8 +296,7 @@ if __name__ == "__main__":
 
     client = Auth.from_key(API_KEY)
 
-    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_1000_sample'
-
+    data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/mlfluv_s12lulc_data_water_from_sediment_rich_sample'
     point_path_list = [os.path.join(data_path, folder) for folder in os.listdir(data_path)]
 
     sub_lists = [point_path_list[x:x+100] for x in range(0, len(point_path_list), 100)]
