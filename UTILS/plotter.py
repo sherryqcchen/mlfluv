@@ -250,7 +250,7 @@ def plot_inference_result(sentinel2_rgb_image, sentinel1_vv_image, label_image, 
     # Add color legend
 
     class_labels = ['background', 'tree', 'shallow-rooted vegetation','water', 'build-up', 'bare', 'fluvial sediment']
-    legend_patches = [mpatches.Patch(color=color, label=label, edgecolor='black') for color, label in zip(colors, class_labels)]
+    legend_patches = [mpatches.Patch(facecolor=color, label=label, edgecolor='black') for color, label in zip(colors, class_labels)]
     plt.legend(handles=legend_patches, loc='lower left', bbox_to_anchor=(1, 0.5), fontsize=20)
 
 

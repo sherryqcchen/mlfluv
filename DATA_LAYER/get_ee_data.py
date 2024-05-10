@@ -4,14 +4,10 @@ import sys
 # Add the parent directory to the system path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-import datetime
-import json
 import csv
 import requests
 import io
 import ee
-import cv2
-import geemap
 import numpy as np
 import numpy.lib.recfunctions as rf
 import matplotlib.pyplot as plt
@@ -368,8 +364,8 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
                 # We also use lng, lat info in the point_id 
             point_id = s2_id + "_" + coord_string
 
-            # data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
-            data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_sediment_rich_samples'
+            data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_STRATIFIED'
+            # data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_mining_bareground_samples'
             point_path = os.path.join(data_path, point_id) 
 
             if not os.path.exists(point_path):
@@ -432,7 +428,9 @@ if __name__ == "__main__":
     year = 2020
 
     # Buffer the point to a rectangle called aoi with 2048*2048 size
-    points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_sediment_rich_sample.csv')
+    # points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_sediment_rich_sample.csv')
+    # points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_mining_bareground_sample.csv')
+    points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_da_order_sample_6000_STRATIFIED.csv')
     
     point_list = []
 
@@ -441,20 +439,20 @@ if __name__ == "__main__":
     with open(points_path, 'r') as file:
         csv_reader = csv.DictReader(file)
         for row in csv_reader:
-            # coord = tuple([float(row['x']), float(row['y'])])
-            coord = tuple(float(x.strip('\'"')) for x in row['coordinates'].strip('()').split(','))
+            coord = tuple([float(row['x']), float(row['y'])])
+            # coord = tuple(float(x.strip('\'"')) for x in row['coordinates'].strip('()').split(','))
             riv_order = int(float(row['riv_order']))
             da = float(row['upland_drainage_area'])
             point_list.append((coord,riv_order, da))
 
     # print(point_list)
-    for idx, (point_coord, riv_ord, da) in enumerate(point_list):
+    for idx, (point_coord, riv_ord, da) in enumerate(point_list[3744:]):
 
-        print(f"{idx}: {point_coord}")
+        print(f"{idx+3744}: {point_coord}")
         try:
             download_1_point_data(point_coord, riv_ord, da, VIS_OPTION=False)
         except ee.ee_exception.EEException as err:
             print("An EEException occurred:", err)
             print('No valid clear data found within the given time range')
             continue
-
+ 

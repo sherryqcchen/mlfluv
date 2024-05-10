@@ -296,8 +296,8 @@ if __name__ == "__main__":
 
     client = Auth.from_key(API_KEY)
 
-    data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/mlfluv_s12lulc_data_water_from_sediment_rich_sample'
-    point_path_list = [os.path.join(data_path, folder) for folder in os.listdir(data_path)]
+    data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_sediment_rich_samples_labelled'
+    point_path_list = [os.path.join(data_path, folder) for folder in os.listdir(data_path) if not folder.endswith('.db')]
 
     sub_lists = [point_path_list[x:x+100] for x in range(0, len(point_path_list), 100)]
     print(len(sub_lists))
@@ -307,7 +307,7 @@ if __name__ == "__main__":
 
     # Run this multiple times (at least twice) until all data (maximum 100) is downloaded. 
     # Then switch to a new sub list 
-    order_100_data(sub_lists[5])
+    order_100_data(sub_lists[0])
     # print()
 
 

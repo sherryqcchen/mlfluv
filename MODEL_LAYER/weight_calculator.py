@@ -57,8 +57,12 @@ def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
         # Create a new DataFrame with complete class values
         complete_df = pd.DataFrame({'Class': complete_class_values})
 
-        # Merge the two DataFrames and fill missing weights with 0
-        df = pd.merge(complete_df, df, on='Class', how='left').fillna(0)
+        # Merge the two DataFrames and 
+        df = pd.merge(complete_df, df, on='Class', how='left')
+
+        # Fill missing weights with the mean weight of all classes exclusing the weight at index 0
+        mean_weight = df.loc[df.index != 0, 'Weights'].mean()
+        df = df.fillna(mean_weight)   # fillna(0) fill with zero
 
         # Save to CSV
         df.to_csv(f'MODEL_LAYER/{weight_func}_weights_{suffix}.csv', index=False)

@@ -1,9 +1,11 @@
 import glob
 import os
+import sys
 import numpy as np
 import pandas as pd
 import rioxarray
-import plotter
+
+import UTILS.plotter as plotter
 
 REMAP_HAND_LABEL = False
 
@@ -13,7 +15,7 @@ point_path_list = glob.glob(os.path.join(data_path, '*'))
 print(f"The count of total downloaded data points: {len(point_path_list)}")
 
 def remap_mask(mask_arr):
-    #[water, tree, grass, crop, urban, sedi, bare, nans] to [nans, water, tree, grass, crop, urban, sedi, bare]
+    #[water, tree, grass, crop, urban, sedi, bare, nans] to [nans, tree, shallow-roots, water, urban, bare, sedi]
     mask_arr = np.where(mask_arr < 0, -1, mask_arr)
     mask_arr = np.where(mask_arr == 7, -1, mask_arr)
     mask_arr = np.where(mask_arr == 5, 7, mask_arr)
@@ -47,16 +49,16 @@ for idx, point_path in enumerate(point_path_list):
     esawc_arr = np.load(esawc_label_path)
 
     esri_mask = remap_mask(esri_arr)
-    np.save(esri_label_path, esri_mask)
+    # np.save(esri_label_path, esri_mask)
 
     glc10_mask = remap_mask(glc10_arr)
-    np.save(glc10_label_path, glc10_mask)
+    # np.save(glc10_label_path, glc10_mask)
 
     dw_mask = remap_mask(dw_arr)
-    np.save(dw_label_path, dw_mask)
+    # np.save(dw_label_path, dw_mask)
 
     esawc_mask = remap_mask(esawc_arr)
-    np.save(esawc_label_path, esawc_mask)
+    # np.save(esawc_label_path, esawc_mask)
 
     if REMAP_HAND_LABEL:
         hand_path = [file for file in file_paths if file.endswith('hand.tif')][0]
@@ -65,7 +67,7 @@ for idx, point_path in enumerate(point_path_list):
         hand_mask = remap_mask(hand_arr.squeeze())
 
         hand_arr.values = np.expand_dims(hand_mask, 0)
-        hand_arr.rio.to_raster(hand_path)
+        # hand_arr.rio.to_raster(hand_path)
 
     s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
     s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]

@@ -12,11 +12,12 @@
       "label": "auto",
       "args": {
         "train_paths":"/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_sedi",
-        "tune_paths":"/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_sedi_hand"
+        "tune_paths":"/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_sedi_hand",
+        "test_paths":"/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_bare_mining"
       }
     },
     "trainer": {
-      "log_num": 0,
+      "log_num": 1001,
       "window_size":512,
       "epochs": 50,
       "in_channels": 15,
