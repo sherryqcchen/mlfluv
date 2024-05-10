@@ -31,7 +31,7 @@ def parse_config_params(config_file):
     return config_params
 
 if __name__ == "__main__":
-    tune_mode = 'fine_tune_01'
+    tune_mode = 'fine_tune_06'
     IF_PREDICT = True
 
     exp_folder = './experiments/1001'
@@ -49,10 +49,11 @@ if __name__ == "__main__":
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
     loss_func = config_params["model"]['loss_function']
-    batch_size = 2 # config_params["trainer"]["batch_size"]
+    batch_size = config_params["trainer"]["batch_size"]
     weight_func = config_params["model"]["weights"]
     window_size = config_params["trainer"]["window_size"]
     temperature = config_params["model"]['temperature']
+    distill_lamda = config_params["model"]['distill_lamda']
     freeze_encoder = config_params["model"]['freeze_encoder']
 
     ENCODER = config_params['model']['encoder']
@@ -62,6 +63,8 @@ if __name__ == "__main__":
     weights_path = f"MODEL_LAYER/{weight_func}_weights_hand.csv"
 
     print(f'Fine tune for log {log_num}')
+    print(f"{temperature = }")
+    print(f"{distill_lamda = }")
 
     # Logging
     logger.add(os.path.join(output_folder, 'info.log'))
@@ -71,7 +74,7 @@ if __name__ == "__main__":
     shutil.copy('MODEL_LAYER/config.json', os.path.join(output_folder, 'config.json'))
 
     # create an untrained model, with one extra class in num_classes
-    old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=0.5)
+    old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
     print(f"{old_net.temperature=}")
 
     train_set = MLFluvDataset(
@@ -139,7 +142,7 @@ if __name__ == "__main__":
         batch_size=batch_size,
         log_num=log_num,
         mode=tune_mode,
-        distill_lamda=0.25,
+        distill_lamda=distill_lamda,
         old_model=old_net
     )
     
@@ -157,10 +160,10 @@ if __name__ == "__main__":
         logger.add(os.path.join(output_folder,'preds.log'))
 
         test_set = MLFluvDataset(
-            config_params['data_loader']['args']['tune_paths'],
+            config_params['data_loader']['args']['test_paths'],
             mode='test',
-            label='hand',
-            folds = [4],
+            label='auto',
+            folds = [0,1,2,3,4],
             one_hot_encode=False      
         )
     

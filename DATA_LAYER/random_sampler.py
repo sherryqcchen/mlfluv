@@ -2,7 +2,7 @@ import xarray as xr
 import pandas as pd
 import random
 
-SAMPLE_METHOD = 'RANDOM' #  'STRATIFIED'
+SAMPLE_METHOD = 'STRATIFIED' #  'RANDOM' 
 
 
 network_order_path = 'Amazon_HydroSHEDS_river_networks/Amazon_river_network_rasterized_by_order.tif'
@@ -26,7 +26,7 @@ if SAMPLE_METHOD == 'RANDOM':
 
 
     # Take 1000 random samples (points with coordinates, river order and upland drainage area) from the network_df
-    sample_length = 12000
+    sample_length = 6000
     sample_index = random.sample(index_list, sample_length)
     sample_df = network_df.iloc[sample_index]
 
@@ -34,7 +34,7 @@ if SAMPLE_METHOD == 'RANDOM':
 
 elif SAMPLE_METHOD == 'STRATIFIED':
     # Define the number of samples
-    num_samples = 2000
+    num_samples = 1000
 
     # Create an empty DataFrame to store the samples
     sample_df = pd.DataFrame()

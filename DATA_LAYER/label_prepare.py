@@ -139,8 +139,8 @@ if __name__=='__main__':
     PLOT_DATA = True
     CONVERT_TO_TIFF = True
 
-    # data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_10000_sample'
-    data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_sediment_rich_samples'
+    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
+    # data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_sediment_rich_samples'
     
     point_path_list = glob.glob(os.path.join(data_path, '*'))
     print(f"The count of total downloaded data points: {len(point_path_list)}")
@@ -205,14 +205,16 @@ if __name__=='__main__':
 
     # Export a list of flivial points path to txt file
     fluvial_point_paths = [path + '\n' for path in fluvial_point_path]
-    with open('DATA_LAYER/sediment_rich_fluvial_points.txt', 'w') as f:
+    with open('DATA_LAYER/general_fluvial_points.txt', 'w') as f:
         f.writelines(fluvial_point_paths)
 
 
     # The path for storing the data with bare pixels (potential sediment pixels)
-    dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_sediment_rich_sample'
+    # dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_sediment_rich_sample'
+    dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_12000_sample'
     
-    with open('DATA_LAYER/sediment_rich_fluvial_points.txt', 'r') as f:
+
+    with open('DATA_LAYER/general_fluvial_points.txt', 'r') as f:
         paths = f.readlines()
 
     # Remove the newline character from each path
@@ -241,8 +243,8 @@ if __name__=='__main__':
         if CONVERT_TO_TIFF:
             convert_npy_to_tiff(s1_fluv_path, 's1', meta_path, new_path)
             convert_npy_to_tiff(s2_fluv_path, 's2', meta_path, new_path)
-            convert_npy_to_tiff(dw_label_path, 'label', meta_path, new_path, remap_to_sedi=True)   
-            convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path, remap_to_sedi=True)  
+            convert_npy_to_tiff(dw_label_path, 'label', meta_path, new_path, remap_to_sedi=False)   
+            convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path, remap_to_sedi=False)  
 
         for fname in os.listdir(path):
             file_path = os.path.join(path, fname)
