@@ -188,6 +188,18 @@ class MLFluvDataset(Dataset):
         else:
             auto_mask_arr = np.load(auto_mask).squeeze()[:512, :512]  
             mask = auto_mask_arr
+        
+        # Handle possible invalid data in Sentinel images, mask them in the labels
+        s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
+        s1_arr[~np.isfinite(s1_arr)] = np.nan
+
+        if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
+            mask_s1 = np.isnan(s1_arr)
+            mask_s2 = np.isnan(s2_arr)
+            
+            union_mask = np.logical_or(mask_s1, mask_s2)
+
+            mask[union_mask] = 0
 
         # mask no data label as clouds (the class that has not shown in the dataset yet)
         mask = np.where(mask < 0, 0, mask) 

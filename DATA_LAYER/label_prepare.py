@@ -137,10 +137,13 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, rema
 if __name__=='__main__':
 
     PLOT_DATA = True
-    CONVERT_TO_TIFF = True
+    CONVERT_TO_TIFF = False
+    HANDLE_NAN_IN_SENTINEL = False
 
-    data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data'
-    # data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_sediment_rich_samples'
+    mode = 'RANDOM_6000'
+
+    # data_path = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/data/full_data/mlfluv_s12lulc_data_{mode}'
+    data_path = '/home/eidf121/eidf121/qc_eidf121/MLFLUV_DATA/data_sediment_rich_samples_labelled'
     
     point_path_list = glob.glob(os.path.join(data_path, '*'))
     print(f"The count of total downloaded data points: {len(point_path_list)}")
@@ -148,13 +151,7 @@ if __name__=='__main__':
     water_point_path = []
     fluvial_point_path = []
     for idx, point_path in enumerate(point_path_list):
-        # print(point_path)
 
-        # if '20200106T151701_20200106T151658_T18MWB_325S7405W' in point_path:
-        #     print(f'I find this weird point at index {idx}.')
-        # else:
-        #     continue
-        
         point_id = os.path.basename(point_path)
         print(f"{idx}: {point_id}")
 
@@ -184,9 +181,22 @@ if __name__=='__main__':
         # Convert invalid values (NaNs) in S1 image to np.nan
         s1_arr[~np.isfinite(s1_arr)] = np.nan
 
-        # Drop data point that contains nan, continue to next point
+        # handle nans in Sentinel data by masking them as 0 in the LULC maps
         if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
-            continue
+            if HANDLE_NAN_IN_SENTINEL:
+                mask_s1 = np.isnan(s1_arr)
+                mask_s2 = np.isnan(s2_arr)
+                union_mask = np.logical_or(mask_s1, mask_s2)
+                
+                # Updating masked values as zero
+                esri_arr[union_mask] = 0
+                dw_arr[union_mask] = 0 
+                glc10_arr[union_mask] = 0
+                esawc_arr[union_mask] = 0
+            else:
+                # Drop data has NaNs
+                continue
+
 
         if PLOT_DATA:
             # Plot out all the images to compare how useful 4 global LULC products are. 
@@ -205,16 +215,20 @@ if __name__=='__main__':
 
     # Export a list of flivial points path to txt file
     fluvial_point_paths = [path + '\n' for path in fluvial_point_path]
-    with open('DATA_LAYER/general_fluvial_points.txt', 'w') as f:
+
+    filename = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/script/DATA_LAYER/{mode}_fluvial_points.txt'
+
+    if not os.path.exists(filename):
+        open(filename, 'w').close()
+
+    with open(filename, 'w') as f:
         f.writelines(fluvial_point_paths)
 
-
     # The path for storing the data with bare pixels (potential sediment pixels)
-    # dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_sediment_rich_sample'
-    dest_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_water_from_12000_sample'
+    dest_path = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/data/clean_data/mlfluv_s12lulc_data_water_from_{mode}'
     
 
-    with open('DATA_LAYER/general_fluvial_points.txt', 'r') as f:
+    with open(filename, 'r') as f:
         paths = f.readlines()
 
     # Remove the newline character from each path
