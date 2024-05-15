@@ -138,7 +138,9 @@ if __name__=='__main__':
 
     PLOT_DATA = True
     CONVERT_TO_TIFF = False
-    HANDLE_NAN_IN_SENTINEL = False
+    REMAP_TO_SEDI = True
+    HANDLE_NAN_IN_SENTINEL = True
+    FLUV_POINT_ONLY = False
 
     mode = 'RANDOM_6000'
 
@@ -193,6 +195,18 @@ if __name__=='__main__':
                 dw_arr[union_mask] = 0 
                 glc10_arr[union_mask] = 0
                 esawc_arr[union_mask] = 0
+
+                if REMAP_TO_SEDI:
+                    esri_arr = np.where(esri_arr==5, 6, esri_arr)
+                    dw_arr = np.where(dw_arr==5, 6, dw_arr)
+                    esawc_arr = np.where(esawc_arr==5, 6, esawc_arr)
+                    glc10_arr = np.where(glc10_arr==5, 6, glc10_arr)
+
+                np.save(esri_label_path, esri_arr)
+                np.save(esawc_label_path, esawc_arr)
+                np.save(dw_label_path, dw_arr)
+                np.save(glc10_label_path, glc10_arr)
+
             else:
                 # Drop data has NaNs
                 continue
@@ -206,8 +220,13 @@ if __name__=='__main__':
             plotter.plot_full_data(s1_arr, s2_arr, esri_arr, esawc_arr, dw_arr, glc10_arr, meta_df, True, point_id)
         
         # Check if Dynamic earth label has any bare pixel (its pixel value is 5, they will be converted to sediment pixels later)
-        if np.isin(dw_arr, 5).any():
+        if FLUV_POINT_ONLY:
+            if np.isin(dw_arr, 5).any():
+                fluvial_point_path.append(point_path)
+                filename = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/script/DATA_LAYER/{mode}_fluvial_points.txt'
+        else:
             fluvial_point_path.append(point_path)
+            filename = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/script/DATA_LAYER/{mode}_general_points.txt'
 
 
     # copy a list of folders with water pixels to a new directory       
@@ -215,11 +234,6 @@ if __name__=='__main__':
 
     # Export a list of flivial points path to txt file
     fluvial_point_paths = [path + '\n' for path in fluvial_point_path]
-
-    filename = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/script/DATA_LAYER/{mode}_fluvial_points.txt'
-
-    if not os.path.exists(filename):
-        open(filename, 'w').close()
 
     with open(filename, 'w') as f:
         f.writelines(fluvial_point_paths)
