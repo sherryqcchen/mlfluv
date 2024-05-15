@@ -50,6 +50,10 @@ def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
     # s = list(range(1, len(folder_list)))
     random.shuffle(folds)
 
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        print(f"{save_dir} created.")
+
     for i, fold in enumerate(folds):
         # print(fold)
         
@@ -60,15 +64,10 @@ def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
                           or file.endswith('hand.tif') 
                           or file.endswith(f'{which_label}.npy')]
             file_paths.sort() # Sorted order is: ESRI.npy, ESRI_hand.tif, S1.noy, S2.npy
-            print(file_paths)
+            # print(file_paths)
             fold_list.append(file_paths)
-
         
-    # save the data path split by 5 folds in npy files
-    if save_dir:
-        os.makedirs(save_dir, exist_ok=True)
-        print(f"{save_dir} created.")
-
+        # save the data path split by 5 folds in npy files
         fold_fname = f"fold_{i}.npy"
         fold_path = os.path.join(save_dir, fold_fname)
         np.save(fold_path, fold_list)
@@ -77,10 +76,10 @@ def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
 
 if __name__ == '__main__':
 
-    INITIAL_TRAIN = False
+    INITIAL_TRAIN = True
     WHICH_LABEL = 'DW' # DW, ESRI, ESAWC, GLC10
 
-    MODE = 'STRATIFIED' # RANDOM, STRATIFIED, sediment, bare
+    MODE = 'RANDOM' # RANDOM, STRATIFIED, sediment, bare
     
     data_path = 'projects/MLFLUV/data/clean_data'
 
