@@ -31,7 +31,7 @@ def delete_folder(folder_path):
     except Exception as e:
         print(f"Error deleting {folder_path}: {e}")
 
-def split_n_folds(n, folder_list, save_dir=None):
+def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
     '''
     Split a list of folders into n folds
     Author: QC
@@ -49,15 +49,6 @@ def split_n_folds(n, folder_list, save_dir=None):
 
     # s = list(range(1, len(folder_list)))
     random.shuffle(folds)
-    # s = [s[i::n] for i in range(n)]
-
-    # save the data path split by 5 folds in npy files
-    if save_dir is None:
-        save_dir = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds'
-    
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-        print(f"{save_dir} created.")
 
     for i, fold in enumerate(folds):
         # print(fold)
@@ -67,31 +58,61 @@ def split_n_folds(n, folder_list, save_dir=None):
             file_paths = [os.path.join(path, file) for file in os.listdir(path) if file.endswith('S1.npy') 
                           or file.endswith('S2.npy') 
                           or file.endswith('hand.tif') 
-                          or file.endswith('ESRI.npy')]
+                          or file.endswith(f'{which_label}.npy')]
             file_paths.sort() # Sorted order is: ESRI.npy, ESRI_hand.tif, S1.noy, S2.npy
+            print(file_paths)
             fold_list.append(file_paths)
 
-        fold_fname = f"fold_{i}.npy"
-        fold_path = os.path.join(save_dir, fold_fname)
-        np.save(fold_path, fold_list)
+        
+        # save the data path split by 5 folds in npy files
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+            print(f"{save_dir} created.")
 
+            fold_fname = f"fold_{i}.npy"
+            fold_path = os.path.join(save_dir, fold_fname)
+            np.save(fold_path, fold_list)
+        
+        return fold_list
 
 if __name__ == '__main__':
+
+    INITIAL_TRAIN = False
+    WHICH_LABEL = 'ESAWC' # DW, ESRI, ESAWC, GLC10
+
+    MODE = 'STRATIFIED' # RANDOM, STRATIFIED, sediment, bare
     
-    labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_STRATIFIED'
-    # labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/data_sediment_rich_samples'
-    # labelled_data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_mining_bareground_samples' #data_sediment_rich_samples_labelled'
+    data_path = 'projects/MLFLUV/data/clean_data'
 
+    labelled_data_dir = [dir for dir in os.listdir(data_path) if MODE in dir][0]
+    labelled_data_path = os.path.join(data_path, labelled_data_dir)
+
+    path_list = [os.path.join(labelled_data_dir, file) for file in os.listdir(labelled_data_path)]
+
+    if not INITIAL_TRAIN:
+        # Spliting data for fine-tuning/incremental learning
+        MODE = 'sediment_bare'
+        sedi_dir = [dir for dir in os.listdir(data_path) if 'sediment' in dir][0]
+        bare_dir = [dir for dir in os.listdir(data_path) if 'bare' in dir][0]
+
+        sedi_list = os.listdir(os.path.join(data_path,sedi_dir))
+        bare_list = os.listdir(os.path.join(data_path,bare_dir))
+
+        sedi_full_path = [os.path.join(sedi_dir, file) for file in sedi_list]
+        bare_full_path = [os.path.join(bare_dir, file) for file in bare_list]
+
+        path_list = sedi_full_path + bare_full_path
+    
+    print(f'Spliting data for {WHICH_LABEL} labels on {MODE} sampling data.')
     # hand_label_list = glob.glob(os.path.join(labelled_data_path, '**/*hand.tif'))
-    auto_label_list = glob.glob(os.path.join(labelled_data_path, '**/*DW.npy'))
-    print(len(auto_label_list))
+    # auto_label_list = glob.glob(os.path.join(labelled_data_path, f'**/*{WHICH_LABEL}.npy'))
+    # print(len(hand_label_list))
 
-    # broken_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/labelled_data_with_NaNs'
     label_list = []
     # compare_list = []
-    for folder in os.listdir(labelled_data_path):
+    for folder in path_list:
         # print(folder)
-        folder_path = os.path.join(labelled_data_path, folder)
+        folder_path = os.path.join(data_path, folder)
         if os.path.isdir(folder_path):
             file_paths = [os.path.join(folder_path, file) for file in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, file))]
         else:
@@ -99,48 +120,32 @@ if __name__ == '__main__':
         
         s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
         s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]
-        
-        has_nan = False
+        label_path = [file for file in file_paths if file.endswith(f'{WHICH_LABEL}.npy')][0]
+
         s1_arr = np.load(s1_path)
         s2_arr = np.load(s2_path)
+        label_arr = np.load(label_path)
 
         # Convert invalid data to np.nan
         s1_arr[~np.isfinite(s1_arr)] = np.nan
         s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
 
+        # Masking where NaNs in Sentinel data as 0 in the label
+        if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
+            mask_s1 = np.isnan(s1_arr)
+            mask_s2 = np.isnan(s2_arr)
+            mask_s1_aggregated = np.any(mask_s1, axis=-1)
+            mask_s2_aggregated = np.any(mask_s2, axis=-1)
+            union_mask = np.logical_or(mask_s1_aggregated, mask_s2_aggregated)
 
-        # label_path = [file for file in file_paths if file.endswith('hand.tif')][0]
-        # label_arr = rasterio.open(label_path).read()
-        # if np.isnan(label_arr).any() == True:
-        #     has_nan = True
-        #     print("Label has NaN.")
+            label_arr[union_mask] = 0
 
-        
-        if np.isnan(s1_arr).any() == True:
-            has_nan = True
-            print("S1 has NaN. Delete this data.")
+            np.save(label_path, label_arr)
 
-        if np.isnan(s2_arr).any() == True:
-            has_nan = True
-            print("S2 has NaN. Delete this data.")
-
-        if has_nan == True:
-            # # Option 1: Move labelled data with NaNs to a new place 
-            # new_path = os.path.join(broken_data_path, folder)
-            # os.makedirs(new_path)
-            # move_files(folder_path, new_path)
-
-            # # Option 2: Delete this data folder and all the content 
-            # delete_folder(folder_path)
-            
-            # Option 3: ignore this data point, continue to examine next data point
-            continue
-        else:
-            label_list.append(folder_path)
+        label_list.append(folder_path)
     
     print(len(label_list))
 
     # Random shuffle data and split them into 5 folds
-    # split_n_folds(5, label_list, save_dir='/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds')
-
-    split_n_folds(5, label_list, save_dir='/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_STRATIFIED_6000')
+    save_fold_path = os.path.join('projects/MLFLUV/data/fold_data', f'{MODE}_sampling_{WHICH_LABEL}_5_fold')
+    split_n_folds(5, label_list, save_dir=save_fold_path, which_label=WHICH_LABEL)

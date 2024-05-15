@@ -188,7 +188,9 @@ if __name__=='__main__':
             if HANDLE_NAN_IN_SENTINEL:
                 mask_s1 = np.isnan(s1_arr)
                 mask_s2 = np.isnan(s2_arr)
-                union_mask = np.logical_or(mask_s1, mask_s2)
+                mask_s1_aggregated = np.any(mask_s1, axis=-1)
+                mask_s2_aggregated = np.any(mask_s2, axis=-1)
+                union_mask = np.logical_or(mask_s1_aggregated, mask_s2_aggregated)
                 
                 # Updating masked values as zero
                 esri_arr[union_mask] = 0
