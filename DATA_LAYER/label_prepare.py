@@ -138,19 +138,20 @@ if __name__=='__main__':
 
     PLOT_DATA = True
     CONVERT_TO_TIFF = False
-    REMAP_TO_SEDI = True
+    REMAP_TO_SEDI = False
     HANDLE_NAN_IN_SENTINEL = True
     FLUV_POINT_ONLY = False
+    MOVE_DATA = False
 
-    mode = 'RANDOM_6000'
+    mode = 'bare' #'RANDOM_6000'
 
     # data_path = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/data/full_data/mlfluv_s12lulc_data_{mode}'
-    data_path = '/home/eidf121/eidf121/qc_eidf121/MLFLUV_DATA/data_sediment_rich_samples_labelled'
+    data_path = f'/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/mlfluv_incremental_data_{mode}'
     
     point_path_list = glob.glob(os.path.join(data_path, '*'))
     print(f"The count of total downloaded data points: {len(point_path_list)}")
     
-    water_point_path = []
+    water_point_path = [] 
     fluvial_point_path = []
     for idx, point_path in enumerate(point_path_list):
 
@@ -176,7 +177,13 @@ if __name__=='__main__':
 
         s1_arr = np.load(s1_path)
         s2_arr = np.load(s2_path)
-    
+
+        if REMAP_TO_SEDI:
+            esri_arr = np.where(esri_arr==5, 6, esri_arr)
+            dw_arr = np.where(dw_arr==5, 6, dw_arr)
+            esawc_arr = np.where(esawc_arr==5, 6, esawc_arr)
+            glc10_arr = np.where(glc10_arr==5, 6, glc10_arr)
+
         # Create a mask for invalid data in S2 image, replace invalid data with NaNs
         s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
 
@@ -197,26 +204,17 @@ if __name__=='__main__':
                 dw_arr[union_mask] = 0 
                 glc10_arr[union_mask] = 0
                 esawc_arr[union_mask] = 0
-
-                if REMAP_TO_SEDI:
-                    esri_arr = np.where(esri_arr==5, 6, esri_arr)
-                    dw_arr = np.where(dw_arr==5, 6, dw_arr)
-                    esawc_arr = np.where(esawc_arr==5, 6, esawc_arr)
-                    glc10_arr = np.where(glc10_arr==5, 6, glc10_arr)
-
-                np.save(esri_label_path, esri_arr)
-                np.save(esawc_label_path, esawc_arr)
-                np.save(dw_label_path, dw_arr)
-                np.save(glc10_label_path, glc10_arr)
-
             else:
                 # Drop data has NaNs
                 continue
 
+        np.save(esri_label_path, esri_arr)
+        np.save(esawc_label_path, esawc_arr)
+        np.save(dw_label_path, dw_arr)
+        np.save(glc10_label_path, glc10_arr)
 
         if PLOT_DATA:
             # Plot out all the images to compare how useful 4 global LULC products are. 
-
             # read meta data of this point
             meta_df = pd.read_csv(meta_path)
             plotter.plot_full_data(s1_arr, s2_arr, esri_arr, esawc_arr, dw_arr, glc10_arr, meta_df, True, point_id)
@@ -225,10 +223,14 @@ if __name__=='__main__':
         if FLUV_POINT_ONLY:
             if np.isin(dw_arr, 5).any():
                 fluvial_point_path.append(point_path)
-                filename = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/script/DATA_LAYER/{mode}_fluvial_points.txt'
+                # filename = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/script/DATA_LAYER/{mode}_fluvial_points.txt'
+                filename = f'DATA_LAYER/{mode}_general_points.txt'
+            else:
+                continue
         else:
             fluvial_point_path.append(point_path)
-            filename = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/script/DATA_LAYER/{mode}_general_points.txt'
+            # filename = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/script/DATA_LAYER/{mode}_general_points.txt'
+            filename = f'DATA_LAYER/{mode}_general_points.txt'
 
 
     # copy a list of folders with water pixels to a new directory       
@@ -241,7 +243,8 @@ if __name__=='__main__':
         f.writelines(fluvial_point_paths)
 
     # The path for storing the data with bare pixels (potential sediment pixels)
-    dest_path = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/data/clean_data/mlfluv_s12lulc_data_water_from_{mode}'
+    # dest_path = f'/home/eidf121/eidf121/qc_eidf121/projects/MLFLUV/data/clean_data/mlfluv_s12lulc_data_water_from_{mode}'
+    dest_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/mlfluv_s12lulc_data_water_from_sediment_rich_sample'
     
 
     with open(filename, 'r') as f:
@@ -275,35 +278,32 @@ if __name__=='__main__':
             convert_npy_to_tiff(s2_fluv_path, 's2', meta_path, new_path)
             convert_npy_to_tiff(dw_label_path, 'label', meta_path, new_path, remap_to_sedi=False)   
             convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path, remap_to_sedi=False)  
+        if MOVE_DATA:
+            for fname in os.listdir(path):
+                file_path = os.path.join(path, fname)
+                shutil.copy(file_path, new_path)
 
-        for fname in os.listdir(path):
-            file_path = os.path.join(path, fname)
-            shutil.copy(file_path, new_path)
+    if PLOT_DATA:
 
-    fluv_point_path_list = glob.glob(os.path.join(dest_path, '*'))
-    
-    for path in fluv_point_path_list:
+        fluv_point_path_list = glob.glob(os.path.join(dest_path, '*'))
+        
+        for path in fluv_point_path_list:
 
-        point_id = os.path.basename(path)
+            point_id = os.path.basename(path)
 
-        file_paths = [os.path.join(path, fname) for fname in os.listdir(path)]
+            file_paths = [os.path.join(path, fname) for fname in os.listdir(path)]
 
-        dw_label_path = [file for file in file_paths if file.endswith('DW.npy')][0]
-        esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
-        s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
-        s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]
+            dw_label_path = [file for file in file_paths if file.endswith('DW.npy')][0]
+            esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
+            s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
+            s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]
 
-        meta_path = [file for file in file_paths if file.endswith('.csv')][0]
+            meta_path = [file for file in file_paths if file.endswith('.csv')][0]
 
-        # Plot S1, S2, ESRI label
-        if PLOT_DATA:
+            # Plot S1, S2, ESRI label
             s1_arr = np.load(s1_path)
             s2_arr = np.load(s2_path)
             dw_arr = np.load(dw_label_path)
             meta_df = pd.read_csv(meta_path)
 
             plotter.plot_s12label(s1_arr, s2_arr, dw_arr, meta_df, True, point_id)
-
-    
-
-
