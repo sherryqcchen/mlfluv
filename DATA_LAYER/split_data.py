@@ -64,21 +64,21 @@ def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
             fold_list.append(file_paths)
 
         
-        # save the data path split by 5 folds in npy files
-        if save_dir:
-            os.makedirs(save_dir, exist_ok=True)
-            print(f"{save_dir} created.")
+    # save the data path split by 5 folds in npy files
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        print(f"{save_dir} created.")
 
-            fold_fname = f"fold_{i}.npy"
-            fold_path = os.path.join(save_dir, fold_fname)
-            np.save(fold_path, fold_list)
-        
-        return fold_list
+        fold_fname = f"fold_{i}.npy"
+        fold_path = os.path.join(save_dir, fold_fname)
+        np.save(fold_path, fold_list)
+    
+    return fold_list
 
 if __name__ == '__main__':
 
     INITIAL_TRAIN = False
-    WHICH_LABEL = 'ESAWC' # DW, ESRI, ESAWC, GLC10
+    WHICH_LABEL = 'DW' # DW, ESRI, ESAWC, GLC10
 
     MODE = 'STRATIFIED' # RANDOM, STRATIFIED, sediment, bare
     
