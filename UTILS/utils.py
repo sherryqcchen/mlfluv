@@ -3,6 +3,7 @@ import json
 import numpy as np
 import xml.etree.ElementTree as ET
 import os
+import yaml
 from zipfile import ZipFile
 from tqdm import tqdm
 
@@ -11,6 +12,11 @@ def parse_config_params(config_file):
     with open(config_file, 'r') as f:
         config_params = json.load(f)
     return config_params
+
+def load_config(config_file):
+    with open(config_file, 'r') as file:
+        config = yaml.safe_load(file)
+    return config
 
 
 def get_band_stats(image_arr):

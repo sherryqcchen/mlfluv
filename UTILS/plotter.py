@@ -1,3 +1,4 @@
+import os
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
@@ -86,7 +87,7 @@ def plot_s1(s1_array, vis_option='VV'):
         plt.imshow(rgb_arr)
     plt.show()
 
-def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig_name=None):
+def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig_name=None, which_label='ESRI'):
 
     s2 = cv2.normalize(s2_array[:, :, [3,2,1]],
                     dst=None,
@@ -108,7 +109,7 @@ def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig
             ax.set_title('Sentinel-2 RGB stack', fontsize=20)
         elif i == 2:
             im = ax.imshow(label_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
-            ax.set_title('Remapped ESRI label', fontsize=20)
+            ax.set_title(f'Remapped {which_label} label', fontsize=20)
     
      # Add color bar for reference
     fig.subplots_adjust(top=0.8, right=0.8)
@@ -130,7 +131,7 @@ def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig
     fig.text(0.10, 0.85, meta_str, fontsize=18)
 
     if savefig==True:
-        plt.savefig(f'data_figures/{fig_name}_fluv.png')
+        plt.savefig(f'data_figure/{fig_name}_fluv.png')
     
     plt.cla()
     plt.close(fig)
@@ -202,9 +203,12 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
     meta_str = f"Images at {date} for {point_coords} in {year}.\n River order: {river_order}, upland drainage area: {da} km \u00B2."
 
     fig.text(0.15, 0.95, meta_str, fontsize=20)
+    
+    data_figure_path = 'data_figure'
+    os.makedirs(data_figure_path, exist_ok=True)
 
     if savefig==True:
-        plt.savefig(f'data_figures/{fig_name}.png')
+        plt.savefig(f'{data_figure_path}/{fig_name}.png')
     
     plt.cla()
     plt.close(fig)

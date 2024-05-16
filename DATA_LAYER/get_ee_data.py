@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 
@@ -15,9 +16,8 @@ from pathlib import Path
 from scipy.interpolate import NearestNDInterpolator
 from gee_s1_ard.python_api import wrapper as wp
 from UTILS import plotter
+from UTILS import utils
 
-S1_BANDS = ['VV', 'VH']
-S2_BANDS = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
 
 def all_exist(full_list, given_list):
     """
@@ -191,7 +191,12 @@ def interpolator(data):
     return data
 
 
-def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OPTION=False, TIF_option=False):
+def download_1_point_data(coords, river_order, 
+                          drainage_area,  
+                          year=2020, 
+                          VIS_OPTION=False, 
+                          s1_bands=['VV', 'VH'], 
+                          s2_bands=['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']):
     """
     Filter Sentinel-1/2 images and 4 LULC labels for a given point in a given year.
     Download all the images as ".npy" files and saved under the directory of point_id
@@ -299,9 +304,9 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
         s1_image = s1_processed.mosaic().set('system:index', s1_id)#.select('VV', 'VH')
 
         # Convert s1_image, s2_image to numpy arrays
-        if all_exist(S1_BANDS, s1_image.bandNames().getInfo()) and all_exist(S2_BANDS, s2_image.bandNames().getInfo()):
-            s1_data, s1_proj = convert_ee_image_to_np_arr(s1_image, S1_BANDS, aoi)
-            s2_data, s2_proj = convert_ee_image_to_np_arr(s2_image, S2_BANDS, aoi)
+        if all_exist(s1_bands, s1_image.bandNames().getInfo()) and all_exist(s2_bands, s2_image.bandNames().getInfo()):
+            s1_data, s1_proj = convert_ee_image_to_np_arr(s1_image, s1_bands, aoi)
+            s2_data, s2_proj = convert_ee_image_to_np_arr(s2_image, s2_bands, aoi)
 
             # Interpolate missing data in s1, s2 images
             s1_filled_data = interpolator(s1_data)
@@ -364,8 +369,7 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
                 # We also use lng, lat info in the point_id 
             point_id = s2_id + "_" + coord_string
 
-            data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_STRATIFIED'
-            # data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_mining_bareground_samples'
+            data_path = 'data/full_data/mlfluv_s12lulc_data_STRATIFIED'
             point_path = os.path.join(data_path, point_id) 
 
             if not os.path.exists(point_path):
@@ -401,9 +405,6 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
             np.save(os.path.join(point_path, point_id+'_DW.npy'), dw_arr)
             np.save(os.path.join(point_path, point_id+'_GLC10.npy'), glc10_arr)
 
-            # if TIF_option:
-                
-
         else:
             print('S1 or S2 has missing bands, skip this point.')
             pass
@@ -415,22 +416,30 @@ def download_1_point_data(coords, river_order, drainage_area,  year=2020, VIS_OP
         
 if __name__ == "__main__":
 
-    service_account = 'earthi-ubuntu@sen12flood-qiuyangchen.iam.gserviceaccount.com'
-    credentials = ee.ServiceAccountCredentials(service_account, './sen12flood-qiuyangchen-8fdb42008616.json')
+    parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for downloading data from Earth Engine API. Remember to apply for a EE authentication key as well.")
+    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
 
-    ee.Initialize(credentials)
+    args = parser.parse_args()
+    config = utils.load_config(args.config_path)
 
-    # # If you don't have Earth Engine Service Account Credentials, using following lines
-    # ee.Authenticate()
-    # ee.Initialize()
+    S1_BANDS = config['sample']['s1_bands']
+    S2_BANDS = config['sample']['s2_bands']
 
-    # print(os.getcwd())
-    year = 2020
+    YEAR = config['sample']['year']
 
-    # Buffer the point to a rectangle called aoi with 2048*2048 size
-    # points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_sediment_rich_sample.csv')
-    # points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_mining_bareground_sample.csv')
-    points_path = Path('/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/Amazon_HydroSHEDS_river_networks/network_da_order_sample_6000_STRATIFIED.csv')
+    SAMPLE_MODE = config['sample']['sample_mode']
+    SAMPLE_LENGTH = config['sample']['sample_length']
+
+    try:
+        service_account = config['ee_service_account']
+        credentials = ee.ServiceAccountCredentials(service_account, config['ee_api_key'])
+        ee.Initialize(credentials)
+    except:
+        # If you don't have Earth Engine Service Account Credentials, using following lines
+        ee.Authenticate()
+        ee.Initialize()
+
+    points_path = Path(f'data/Amazon_HydroSHEDS_river_networks/network_points_{SAMPLE_LENGTH}_{SAMPLE_MODE}.csv')
     
     point_list = []
 
@@ -439,18 +448,20 @@ if __name__ == "__main__":
     with open(points_path, 'r') as file:
         csv_reader = csv.DictReader(file)
         for row in csv_reader:
-            coord = tuple([float(row['x']), float(row['y'])])
-            # coord = tuple(float(x.strip('\'"')) for x in row['coordinates'].strip('()').split(','))
+            try:
+                coord = tuple([float(row['x']), float(row['y'])])
+            except:
+                coord = tuple(float(x.strip('\'"')) for x in row['coordinates'].strip('()').split(','))
             riv_order = int(float(row['riv_order']))
             da = float(row['upland_drainage_area'])
             point_list.append((coord,riv_order, da))
 
     # print(point_list)
-    for idx, (point_coord, riv_ord, da) in enumerate(point_list[3744:]):
+    for idx, (point_coord, riv_ord, da) in enumerate(point_list):
 
-        print(f"{idx+3744}: {point_coord}")
+        print(f"{idx}: {point_coord}")
         try:
-            download_1_point_data(point_coord, riv_ord, da, VIS_OPTION=False)
+            download_1_point_data(point_coord, riv_ord, da, year=YEAR, VIS_OPTION=False, s1_bands=S1_BANDS, s2_bands=S2_BANDS)
         except ee.ee_exception.EEException as err:
             print("An EEException occurred:", err)
             print('No valid clear data found within the given time range')

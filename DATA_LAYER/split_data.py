@@ -1,8 +1,12 @@
 import os
-import glob
+import sys
+# Add the parent directory to the system path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import random
 import numpy as np
 import shutil
+import argparse
+from UTILS import utils
 
 def move_files(src_dir, dest_dir):
     # Walk through the source directory
@@ -64,7 +68,6 @@ def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
                           or file.endswith('hand.tif') 
                           or file.endswith(f'{which_label}.npy')]
             file_paths.sort() # Sorted order is: ESRI.npy, ESRI_hand.tif, S1.noy, S2.npy
-            # print(file_paths)
             fold_list.append(file_paths)
         
         # save the data path split by 5 folds in npy files
@@ -75,38 +78,16 @@ def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
     return fold_list
 
 if __name__ == '__main__':
-
-    INITIAL_TRAIN = True
-    WHICH_LABEL = 'DW' # DW, ESRI, ESAWC, GLC10
-
-    MODE = 'RANDOM' # RANDOM, STRATIFIED, sediment, bare
     
-    data_path = 'projects/MLFLUV/data/clean_data'
+    labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_STRATIFIED'
+    # labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/data_sediment_rich_samples'
+    # labelled_data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_mining_bareground_samples' #data_sediment_rich_samples_labelled'
 
-    labelled_data_dir = [dir for dir in os.listdir(data_path) if MODE in dir][0]
-    labelled_data_path = os.path.join(data_path, labelled_data_dir)
-
-    path_list = [os.path.join(labelled_data_dir, file) for file in os.listdir(labelled_data_path)]
-
-    if not INITIAL_TRAIN:
-        # Spliting data for fine-tuning/incremental learning
-        MODE = 'sediment_bare'
-        sedi_dir = [dir for dir in os.listdir(data_path) if 'sediment' in dir][0]
-        bare_dir = [dir for dir in os.listdir(data_path) if 'bare' in dir][0]
-
-        sedi_list = os.listdir(os.path.join(data_path,sedi_dir))
-        bare_list = os.listdir(os.path.join(data_path,bare_dir))
-
-        sedi_full_path = [os.path.join(sedi_dir, file) for file in sedi_list]
-        bare_full_path = [os.path.join(bare_dir, file) for file in bare_list]
-
-        path_list = sedi_full_path + bare_full_path
-    
-    print(f'Spliting data for {WHICH_LABEL} labels on {MODE} sampling data.')
     # hand_label_list = glob.glob(os.path.join(labelled_data_path, '**/*hand.tif'))
-    # auto_label_list = glob.glob(os.path.join(labelled_data_path, f'**/*{WHICH_LABEL}.npy'))
-    # print(len(hand_label_list))
+    auto_label_list = glob.glob(os.path.join(labelled_data_path, '**/*DW.npy'))
+    print(len(auto_label_list))
 
+    # broken_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/labelled_data_with_NaNs'
     label_list = []
     # compare_list = []
     for folder in path_list:
@@ -146,5 +127,6 @@ if __name__ == '__main__':
     print(len(label_list))
 
     # Random shuffle data and split them into 5 folds
-    save_fold_path = os.path.join('projects/MLFLUV/data/fold_data', f'{MODE}_sampling_{WHICH_LABEL}_5_fold')
-    split_n_folds(5, label_list, save_dir=save_fold_path, which_label=WHICH_LABEL)
+    # split_n_folds(5, label_list, save_dir='/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds')
+
+    split_n_folds(5, label_list, save_dir='/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_STRATIFIED_6000')
