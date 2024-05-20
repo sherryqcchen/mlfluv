@@ -1,8 +1,11 @@
 # this script is for incremental learning 
+import argparse
 import cv2
-import json
 import shutil
 import os
+import sys
+# Add the parent directory to the system path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import copy
 import numpy as np
 import pandas as pd
@@ -20,31 +23,28 @@ from dataset import MLFluvDataset
 from interface import MLFluvUnetInterface
 from weight_calculator import get_class_weight
 from inference import infer_with_patches
-from UTILS.utils import parse_config_params
+from UTILS.utils import load_config
 from UTILS.plotter import plot_inference_result
 
-# from utils import parse_config_params
-
-def parse_config_params(config_file):
-    with open(config_file, 'r') as f:
-        config_params = json.load(f)
-    return config_params
 
 if __name__ == "__main__":
-    tune_mode = 'fine_tune_06'
-    IF_PREDICT = True
+    ####################################
+    # PARSE CONFIG FILE
+    ####################################
+    parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
+    parser.add_argument('--config_path',type=str, default='script/config.yml', help='Path to a configuration yaml file.' )
+    parser.add_argument('--if_predict',type=bool,default=True, help='True if make prediction using fine-tuned model.')
+    args = parser.parse_args()
 
-    exp_folder = './experiments/1001'
-    output_folder =f'./experiments/1001/{tune_mode}'
-    os.makedirs(output_folder, exist_ok=True)
-
-    SHOW_PLOTS = False
-
-    config_params = parse_config_params(os.path.join(exp_folder, 'config.json'))
+    config_params = load_config(args.config_path)
     
+    sample_mode = config_params["sample"]["sample_mode"]
+    which_label = config_params["data_loader"]["which_label"]
     log_num = config_params["trainer"]["log_num"]
+    train_fold = config_params["trainer"]["train_fold"]
+    valid_fold = config_params["trainer"]["valid_fold"]
     in_channels = config_params["trainer"]["in_channels"]
-    classes = 7 
+    classes = config_params["trainer"]["classes"] + 1 # 7
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
@@ -52,17 +52,23 @@ if __name__ == "__main__":
     batch_size = config_params["trainer"]["batch_size"]
     weight_func = config_params["model"]["weights"]
     window_size = config_params["trainer"]["window_size"]
-    temperature = config_params["model"]['temperature']
-    distill_lamda = config_params["model"]['distill_lamda']
-    freeze_encoder = config_params["model"]['freeze_encoder']
-
+    temperature = config_params["incremental_learning"]['temperature']
+    distill_lamda = config_params["incremental_learning"]['distill_lamda']
+    freeze_encoder = config_params["incremental_learning"]['freeze_encoder']
+    tune_mode = f'fine_tune_{config_params["incremental_learning"]["tune_log_num"]}'
     ENCODER = config_params['model']['encoder']
     ENCODER_WEIGHTS = None
     ACTIVATION = None
 
-    weights_path = f"MODEL_LAYER/{weight_func}_weights_hand.csv"
+    exp_folder = f'script/experiments/{log_num}'
+    output_folder =f'script/experiments/{log_num}/{tune_mode}'
+    os.makedirs(output_folder, exist_ok=True)
 
-    print(f'Fine tune for log {log_num}')
+    SHOW_PLOTS = False
+
+    weights_path = f"script/MODEL_LAYER/{weight_func}_weights_{which_label}_fintune.csv"
+
+    print(f'Fine tune {tune_mode} for log {log_num}')
     print(f"{temperature = }")
     print(f"{distill_lamda = }")
 
@@ -70,26 +76,28 @@ if __name__ == "__main__":
     logger.add(os.path.join(output_folder, 'info.log'))
 
     os.makedirs(os.path.join(output_folder, 'checkpoints'), exist_ok=True)
-    shutil.copy(f'MODEL_LAYER/fine_tune.py', os.path.join(output_folder, 'fine_tune.py'))
-    shutil.copy('MODEL_LAYER/config.json', os.path.join(output_folder, 'config.json'))
+    shutil.copy(f'script/MODEL_LAYER/fine_tune.py', os.path.join(output_folder, 'fine_tune.py'))
+    shutil.copy('script/config.yml', os.path.join(output_folder, 'config.yml'))
 
     # create an untrained model, with one extra class in num_classes
     old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
     print(f"{old_net.temperature=}")
 
+    fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_{which_label}_5_fold')
+
     train_set = MLFluvDataset(
-        config_params['data_loader']['args']['tune_paths'],
+        data_path=fold_data_path,
         mode='train',
-        label='hand',
-        folds = [0, 1, 2, 3],
+        label=which_label,
+        folds=train_fold,
         one_hot_encode=False      
     )
 
     val_set = MLFluvDataset(
-        config_params['data_loader']['args']['tune_paths'],
+        data_path=fold_data_path,
         mode='val',
-        label='hand',
-        folds = [4],
+        label=which_label,
+        folds=valid_fold,
         one_hot_encode=False      
     )
     
@@ -100,7 +108,7 @@ if __name__ == "__main__":
     
     # Create new UNet by copying the old Unet
     new_net = copy.deepcopy(old_net)
-    new_net.num_valid_classes = 7
+    new_net.num_valid_classes = classes
     print(f"{new_net.temperature=}")
 
     # Use saved weights for loss function, if the weights are pre-calculated 
@@ -149,7 +157,7 @@ if __name__ == "__main__":
     interface.train(epochs=epochs, eval_interval=5)
 
     # Making predictions
-    if IF_PREDICT is True:
+    if args.if_predict is True:
         # Do inference in CPU, overwrite device with 'cpu'
         device = 'cpu'
 
@@ -160,10 +168,10 @@ if __name__ == "__main__":
         logger.add(os.path.join(output_folder,'preds.log'))
 
         test_set = MLFluvDataset(
-            config_params['data_loader']['args']['test_paths'],
+            data_path=f'data/fold_data/test_{which_label}_fold',
             mode='test',
-            label='auto',
-            folds = [0,1,2,3,4],
+            label='hand',
+            folds = None,
             one_hot_encode=False      
         )
     

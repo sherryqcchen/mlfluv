@@ -1,16 +1,16 @@
+import argparse
 import csv
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
 import numpy as np
 import pandas as pd
 import json
 import sklearn
 
 from dataset import MLFluvDataset
-
-def parse_config_params(config_file):
-    with open(config_file, 'r') as f:
-        config_params = json.load(f)
-    return config_params
+from UTILS import utils
 
 def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
         # get weights based on the pixel count of each class in train set 
@@ -25,6 +25,7 @@ def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
             class_counts[unique_classes] += counts
 
         classes = np.where(class_counts > 0)[0]
+        frequencies = np.where(class_counts > 0)[0]
         frequencies = class_counts[classes] 
         num_classes = len(classes)
 
@@ -65,7 +66,7 @@ def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
         df = df.fillna(mean_weight)   # fillna(0) fill with zero
 
         # Save to CSV
-        df.to_csv(f'MODEL_LAYER/{weight_func}_weights_{suffix}.csv', index=False)
+        df.to_csv(f'script/MODEL_LAYER/{weight_func}_weights_{suffix}.csv', index=False)
 
         return df['Weights']
 
@@ -75,11 +76,17 @@ if __name__ == "__main__":
     ####################################
     # PARSE CONFIG FILE
     ####################################
-    config_params = parse_config_params('MODEL_LAYER/config.json')
+    parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
+    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
 
+    args = parser.parse_args()
+    config_params = utils.load_config(args.config_path)
+
+    sample_mode = config_params["sample"]["sample_mode"]
     log_num = config_params["trainer"]["log_num"]
     in_channels = config_params["trainer"]["in_channels"]
     num_classes = config_params["trainer"]["classes"]
+    train_fold = config_params["trainer"]["train_fold"]
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
@@ -87,24 +94,24 @@ if __name__ == "__main__":
     window_size = config_params["trainer"]["window_size"]
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
-    label_mode = config_params['data_loader']['label']
-    
+    which_label = config_params['data_loader']['which_label']
 
-    weights_path = f"{weight_func}_weights_{label_mode}.csv"
+    fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'{sample_mode}_sampling_{which_label}_5_fold')
+
+    weights_path = f"{weight_func}_weights_{which_label}.csv"
 
     train_set = MLFluvDataset(
-    data_path=config_params['data_loader']['args']['data_paths'],
-    mode='train',
-    folds = [0, 1, 2, 3],
-    window=window_size,
-    label=label_mode,
-    one_hot_encode=False
-    )
+        data_path = fold_data_path,
+        mode = 'test', # Use val here because we don't want any cropped data for calculating weights
+        folds = train_fold,
+        window = window_size,
+        label = which_label,
+        one_hot_encode = False)
 
     if os.path.isfile(weights_path):
         class_weights = list(csv.reader(open(weights_path, "r"), delimiter=","))
         class_weights = np.array([float(i) for i in class_weights[0]])
     else:
-        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=label_mode)
+        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=which_label)
     print(class_weights)
 

@@ -1,5 +1,6 @@
 import shutil
 import time
+import numpy as np
 from torchmetrics import JaccardIndex
 from torch.utils.data import DataLoader
 import segmentation_models_pytorch as smp
@@ -64,9 +65,9 @@ class MLFluvUnetInterface():
         self.mode = mode
 
         if self.mode == "initial_train":
-            self.best_model_path = f'./experiments/{self.log_num}/checkpoints/best_model.pth'
+            self.best_model_path = f'script/experiments/{self.log_num}/checkpoints/best_model.pth'
         else:
-            self.best_model_path = f'./experiments/{self.log_num}/{self.mode}/checkpoints/best_model.pth'
+            self.best_model_path = f'script/experiments/{self.log_num}/{self.mode}/checkpoints/best_model.pth'
 
         self.old_model = old_model
 
@@ -108,14 +109,14 @@ class MLFluvUnetInterface():
 
         if self.log_num is not None:
             # LOGGING
-            logger.add(f'experiments/{self.log_num}/info.log')
+            logger.add(f'script/experiments/{self.log_num}/info.log')
 
             os.makedirs(f'./experiments/{log_num}', exist_ok=True)
             os.makedirs(f'./experiments/{log_num}/checkpoints', exist_ok=True)
 
-            shutil.copy('MODEL_LAYER/config.json', os.path.join(f'./experiments/{log_num}', 'config.json'))
-            shutil.copy(f'MODEL_LAYER/dataset.py', os.path.join(f'./experiments/{log_num}', f'dataset.py'))
-            shutil.copy(f'MODEL_LAYER/train.py', os.path.join(f'./experiments/{log_num}', f'train.py'))
+            shutil.copy('script/config.yml', os.path.join(f'script/experiments/{log_num}', 'config.yml'))
+            shutil.copy(f'script/MODEL_LAYER/dataset.py', os.path.join(f'script/experiments/{log_num}', f'dataset.py'))
+            shutil.copy(f'script/MODEL_LAYER/train.py', os.path.join(f'script/experiments/{log_num}', f'train.py'))
 
     def train_1epoch(self, epoch_idx):
         # train on one epoch and calculate train loss
@@ -130,6 +131,10 @@ class MLFluvUnetInterface():
         for batch_idx, (X_batch, y_batch) in enumerate(self.dataloader_train):
 
             X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
+
+           # Use an assert statement to check for NaN values
+            assert not np.any(np.isnan(X_batch.cpu().numpy())), f"NaN value found in X_batch dataset at index {batch_idx}"
+            assert not np.any(np.isnan(y_batch.cpu().numpy())), f"NaN value found in y_batch dataset at index {batch_idx}"
         
             self.optimiser.zero_grad()
 

@@ -42,17 +42,17 @@ def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
     Args:
         n: int, n folds.
         folder_list: list, a list of folder paths where all data points are stored.
-        out_fname: the path of json file that store split information.
+        out_fname: the path of npy file that store split information.
     Return:
-        n_folds: dictionary, the key is named as 'fold_n', and the value under each key is a list of folder paths that are stored under this fold.
+        
     '''
 
     print(f'All data folders are split into {n} folds.')
+    random.shuffle(folder_list)
+    print('The length of all data in the list:', len(folder_list))
+ 
     paths_per_fold = len(folder_list) // n
     folds = [folder_list[i * paths_per_fold: (i + 1) * paths_per_fold] for i in range(n)]
-
-    # s = list(range(1, len(folder_list)))
-    random.shuffle(folds)
 
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
@@ -67,6 +67,9 @@ def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
                           or file.endswith('S2.npy') 
                           or file.endswith('hand.tif') 
                           or file.endswith(f'{which_label}.npy')]
+            print(len(file_paths))
+            if len(file_paths)==4:
+                print(path)
             file_paths.sort() # Sorted order is: ESRI.npy, ESRI_hand.tif, S1.noy, S2.npy
             fold_list.append(file_paths)
         
@@ -74,24 +77,13 @@ def split_n_folds(n, folder_list, save_dir=None, which_label='ESRI'):
         fold_fname = f"fold_{i}.npy"
         fold_path = os.path.join(save_dir, fold_fname)
         np.save(fold_path, fold_list)
-    
-    return fold_list
 
-if __name__ == '__main__':
-    
-    labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_s12lulc_data_STRATIFIED'
-    # labelled_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/data_sediment_rich_samples'
-    # labelled_data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_mining_bareground_samples' #data_sediment_rich_samples_labelled'
 
-    # hand_label_list = glob.glob(os.path.join(labelled_data_path, '**/*hand.tif'))
-    auto_label_list = glob.glob(os.path.join(labelled_data_path, '**/*DW.npy'))
-    print(len(auto_label_list))
+def get_s12label_list(WHICH_LABEL, data_path):
 
-    # broken_data_path = '/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/labelled_data_with_NaNs'
     label_list = []
-    # compare_list = []
-    for folder in path_list:
-        # print(folder)
+    
+    for folder in os.listdir(data_path):
         folder_path = os.path.join(data_path, folder)
         if os.path.isdir(folder_path):
             file_paths = [os.path.join(folder_path, file) for file in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, file))]
@@ -100,33 +92,78 @@ if __name__ == '__main__':
         
         s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
         s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]
-        label_path = [file for file in file_paths if file.endswith(f'{WHICH_LABEL}.npy')][0]
 
         s1_arr = np.load(s1_path)
         s2_arr = np.load(s2_path)
-        label_arr = np.load(label_path)
+      
+        if WHICH_LABEL != 'hand':
+            label_path = [file for file in file_paths if file.endswith(f'{WHICH_LABEL}.npy')][0]
+            label_arr = np.load(label_path)
 
-        # Convert invalid data to np.nan
-        s1_arr[~np.isfinite(s1_arr)] = np.nan
-        s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
+            # print('Before removing NaNs:', np.unique(label_arr))
 
-        # Masking where NaNs in Sentinel data as 0 in the label
-        if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
-            mask_s1 = np.isnan(s1_arr)
-            mask_s2 = np.isnan(s2_arr)
-            mask_s1_aggregated = np.any(mask_s1, axis=-1)
-            mask_s2_aggregated = np.any(mask_s2, axis=-1)
-            union_mask = np.logical_or(mask_s1_aggregated, mask_s2_aggregated)
+            # Mask -inf in the label as 0
+            label_arr[~np.isfinite(label_arr)] = 0
 
-            label_arr[union_mask] = 0
+            # Convert invalid data to np.nan
+            s1_arr[~np.isfinite(s1_arr)] = np.nan
+            s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
+
+            # Masking where NaNs in Sentinel data as 0 in the label
+            if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
+                continue
+                # mask_s1 = np.isnan(s1_arr)
+                # mask_s2 = np.isnan(s2_arr)
+                # mask_s1_aggregated = np.any(mask_s1, axis=-1)
+                # mask_s2_aggregated = np.any(mask_s2, axis=-1)
+                # union_mask = np.logical_or(mask_s1_aggregated, mask_s2_aggregated)
+
+                # label_arr[union_mask] = 0
 
             np.save(label_path, label_arr)
 
+        else:
+
+
+            # print('After removing NaNs:', np.unique(label_arr))
+
         label_list.append(folder_path)
-    
-    print(len(label_list))
 
-    # Random shuffle data and split them into 5 folds
-    # split_n_folds(5, label_list, save_dir='/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds')
+    return label_list
 
-    split_n_folds(5, label_list, save_dir='/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_STRATIFIED_6000')
+if __name__ == '__main__':
+
+    ####################################
+    # PARSE CONFIG FILE
+    ####################################
+    parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
+    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
+    parser.add_argument('--split_train_only',type=bool,default=False, help='True if only train data is splited into folds.' )
+
+    args = parser.parse_args()
+    config_params = utils.load_config(args.config_path)
+    sample_mode = config_params['sample']['sample_mode']
+    WHICH_LABEL = config_params['data_loader']['which_label']
+    test_data_path = config_params['data_loader']['test_paths']
+
+    train_data_path = f'data/clean_data/mlfluv_s12lulc_data_clean_{sample_mode}'
+    print("Processing train data.")
+    train_label_list = get_s12label_list(WHICH_LABEL, train_data_path)
+    split_n_folds(5, train_label_list, save_dir=f'data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL)
+
+    if not args.split_train_only:
+        # Getting the folder list for sediment and bare class seperation
+        print('Processing sediment data.')
+        sediment_label_list = get_s12label_list(WHICH_LABEL, f'data/clean_data/mlfluv_incremental_data_sediment')
+        print('Processing bare data.')
+        bare_label_list = get_s12label_list(WHICH_LABEL, f'data/clean_data/mlfluv_incremental_data_bare')
+        # Concatenate two lists into one list for incremental learning (fine tuning)
+        incremental_label_list = sediment_label_list + bare_label_list
+        print('Processing test data.')
+        test_label_list = get_s12label_list('hand', test_data_path)
+
+        # Random shuffle train data and split them into 5 folds
+        print('Spliting test data.')
+        split_n_folds(1, test_label_list, save_dir=f'data/fold_data/test_{WHICH_LABEL}_fold', which_label=WHICH_LABEL)
+        print('Spliting incremental data.')
+        split_n_folds(5, incremental_label_list, save_dir=f'data/fold_data/finetune_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL)

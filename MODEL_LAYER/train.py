@@ -1,7 +1,10 @@
 # Train for the initial model of Unet 
 
+import argparse
 import csv
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import shutil
 import json
 import numpy as np
@@ -14,13 +17,8 @@ import torch.nn as nn
 from model import SMPUnet
 from dataset import MLFluvDataset
 from interface import MLFluvUnetInterface
+from UTILS import utils
 from weight_calculator import get_class_weight
-
-
-def parse_config_params(config_file):
-    with open(config_file, 'r') as f:
-        config_params = json.load(f)
-    return config_params
 
 
 if __name__ == "__main__":
@@ -28,10 +26,18 @@ if __name__ == "__main__":
     ####################################
     # PARSE CONFIG FILE
     ####################################
-    print(os.getcwd())
-    config_params = parse_config_params('MODEL_LAYER/config.json')
+    parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
+    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
+
+    args = parser.parse_args()
+    config_params = utils.load_config(args.config_path)
+
+    sample_mode = config_params["sample"]["sample_mode"]
+    which_label = config_params["data_loader"]["which_label"]
 
     log_num = config_params["trainer"]["log_num"]
+    train_fold = config_params["trainer"]["train_fold"]
+    valid_fold = config_params["trainer"]["valid_fold"]
     in_channels = config_params["trainer"]["in_channels"]
     num_classes = config_params["trainer"]["classes"]
     device = config_params["trainer"]["device"]
@@ -41,26 +47,22 @@ if __name__ == "__main__":
     window_size = config_params["trainer"]["window_size"]
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
-    temperature = config_params["model"]['temperature']
-    distill_lamda = config_params["model"]['distill_lamda']
 
-    label_mode = config_params['data_loader']['label']
-
-    weights_path = f"MODEL_LAYER/{weight_func}_weights_{label_mode}.csv"
+    weights_path = f"script/MODEL_LAYER/{weight_func}_weights_{which_label}.csv"
 
     print(f"Train for log {log_num}")
 
     # LOGGING
 
-    logger.add(f'experiments/{config_params["trainer"]["log_num"]}/info.log')
+    logger.add(f'script/experiments/{config_params["trainer"]["log_num"]}/info.log')
     # writer = SummaryWriter(f'./experiments/{log_num}/tensorboard')
 
-    os.makedirs(f'./experiments/{log_num}', exist_ok=True)
-    os.makedirs(f'./experiments/{log_num}/checkpoints', exist_ok=True)
+    os.makedirs(f'script/experiments/{log_num}', exist_ok=True)
+    os.makedirs(f'script/experiments/{log_num}/checkpoints', exist_ok=True)
 
-    shutil.copy('MODEL_LAYER/config.json', os.path.join(f'./experiments/{log_num}', 'config.json'))
-    shutil.copy(f'MODEL_LAYER/dataset.py', os.path.join(f'./experiments/{log_num}', f'dataset.py'))
-    shutil.copy(f'MODEL_LAYER/train.py', os.path.join(f'./experiments/{log_num}', f'train.py'))
+    shutil.copy('script/config.yml', os.path.join(f'script/experiments/{log_num}', 'config.yml'))
+    shutil.copy(f'script/MODEL_LAYER/dataset.py', os.path.join(f'script/experiments/{log_num}', f'dataset.py'))
+    shutil.copy(f'script/MODEL_LAYER/train.py', os.path.join(f'script/experiments/{log_num}', f'train.py'))
 
     # MODEL PARAMS
 
@@ -74,21 +76,23 @@ if __name__ == "__main__":
     model = SMPUnet(encoder_name=ENCODER, in_channels=15, num_classes=6)
     # print(model)
 
+    fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'{sample_mode}_sampling_{which_label}_5_fold')
+
     train_set = MLFluvDataset(
-        data_path=config_params['data_loader']['args']['train_paths'],
+        data_path=fold_data_path,
         mode='train',
-        folds = [0, 1, 2, 3],
+        folds=train_fold,
         window=window_size,
-        label=label_mode,
+        label=which_label,
         one_hot_encode=False
     )
 
     val_set = MLFluvDataset(
-        data_path=config_params['data_loader']['args']['train_paths'],
+        data_path=fold_data_path,
         mode='val',
-        folds = [4],
+        folds=valid_fold,
         window=window_size, 
-        label=label_mode,
+        label=which_label,
         one_hot_encode=False
     )
 
@@ -98,7 +102,7 @@ if __name__ == "__main__":
         class_weights = df['Weights']
     else:
         print('Going to calculate weight now..')
-        class_weights = get_class_weight(train_set, weight_func=weight_func)
+        class_weights = get_class_weight(train_set, weight_func=weight_func,suffix=which_label)
     print(class_weights)
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 
@@ -117,8 +121,7 @@ if __name__ == "__main__":
             reduction='mean',
             device=device,
             dtype=torch.float32,
-            force_reload=False
-        )
+            force_reload=False)
 
     # criterion = smp.losses.DiceLoss(mode='multiclass')
     
@@ -132,8 +135,7 @@ if __name__ == "__main__":
         optimiser=optimiser,
         device=device,
         batch_size=batch_size,
-        log_num=log_num,
-        distill_lamda = 0,
+        log_num=log_num
     )
     
     interface.train(epochs=epochs, eval_interval=10)

@@ -12,9 +12,6 @@ def plot_pair(image, mask, surfix):
     axes[0].imshow(image[4,:,:])
     axes[0].set_title('rgb')
 
-    # axes[1].imshow(y_pred.cpu().numpy()[i], cmap='jet')
-    # axes[1].set_title('y_val_pred')
-
     axes[1].imshow(mask, cmap='jet')
     axes[1].set_title('mask')
 
@@ -101,12 +98,12 @@ class MLFluvDataset(Dataset):
 
     def __init__(
             self,
-            data_path="/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds",
-            window = 256,
+            data_path="data/fold_data",
+            window = 512,
             norm = True,
             mode = 'train',
-            folds = [0, 1, 2, 4],
-            label = 'hand',
+            folds = [0, 1, 2, 3],
+            label = None,
             one_hot_encode = False          
     ):
         """
@@ -115,7 +112,7 @@ class MLFluvDataset(Dataset):
         """   
         # print(os.listdir(data_path))
         self.file_paths = [os.path.join(data_path, file) for file in os.listdir(data_path)] # 5 npy files
-        self.all_folds = [np.load(file) for file in self.file_paths] # len() is 5 because of 5 folds split
+        self.all_folds = [np.load(file, allow_pickle=True) for file in self.file_paths if file.endswith('.npy')] # len() is 5 because of 5 folds split
 
         if folds == None:
             # If folds are not specified, all data will be loaded
@@ -131,7 +128,7 @@ class MLFluvDataset(Dataset):
         self.one_hot_encode = one_hot_encode
 
         if self.one_hot_encode:
-            self.label_values = [0, 1, 2, 3, 4, 5, 6, 7]
+            self.label_values = [0, 1, 2, 3, 4, 5, 6]
             
 
     def transform(self, image, mask, rough_mask=None):
@@ -162,7 +159,7 @@ class MLFluvDataset(Dataset):
                 # center crop no rotation (so that val/test are always the same)
                 image, mask = center_crop(image, mask, window=self.window)
             image = normalize_per_channel(image)
-        else:
+        else:   
             image = normalize_per_channel(image) # do not crop testing set
 
         return image, mask
@@ -173,19 +170,17 @@ class MLFluvDataset(Dataset):
 
         # if the input data is changed, go to split_data.py to check the new orders of s1, s2 and labels
         s1_path = [path for path in data_paths if path.endswith('S1.npy')][0]
-        s2_path = [path for path in data_paths if path.endswith('S2.npy')][0]
-        auto_mask = [path for path in data_paths if path.endswith('ESRI.npy') or path.endswith('DW.npy')][0]
-
-        if len(data_paths) == 4:
-            hand_mask = [path for path in data_paths if path.endswith('hand.tif')][0]   
+        s2_path = [path for path in data_paths if path.endswith('S2.npy')][0]     
 
         s1_arr = np.load(s1_path) # shape [h, w, band], band=2
         s2_arr = np.load(s2_path) # shape [h, w, band], band=13
 
         if self.label == 'hand':
+            hand_mask = [path for path in data_paths if path.endswith('hand.tif')][0]
             hand_mask_arr = rioxarray.open_rasterio(hand_mask).data.squeeze()[:512, :512]
             mask = hand_mask_arr
         else:
+            auto_mask = [path for path in data_paths if path.endswith(f'{self.label}.npy')][0]
             auto_mask_arr = np.load(auto_mask).squeeze()[:512, :512]  
             mask = auto_mask_arr
         
@@ -194,21 +189,20 @@ class MLFluvDataset(Dataset):
         s1_arr[~np.isfinite(s1_arr)] = np.nan
 
         if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
-            mask_s1 = np.isnan(s1_arr)
-            mask_s2 = np.isnan(s2_arr)
+            mask_s1 = np.isnan(s1_arr)[:512,:512,0]
+            mask_s2 = np.isnan(s2_arr)[:512,:512,0]
             
             union_mask = np.logical_or(mask_s1, mask_s2)
 
             mask[union_mask] = 0
 
         # mask no data label as clouds (the class that has not shown in the dataset yet)
-        mask = np.where(mask < 0, 0, mask) 
-        self.num_classes = 7
+        mask = np.where((mask >= 0) & (mask <= 6), mask, 0)
+        # auto labels do not have sediment class (6), therefore the num_class = 6
+        self.num_classes = 6
 
-        if self.label == 'auto':
-            # auto labels do not have sediment class (6), therefore reset the num_class = 6
-            self.num_classes = 6
-
+        if self.label == 'hand':
+            self.num_classes = 7
 
         # Train on S1 2 bands and S2 13 bands
         # clip each image to 512*512 as height * width
@@ -249,7 +243,7 @@ if __name__ == '__main__':
     my_dataset = MLFluvDataset(data_path="/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_auto", 
                                folds=[0], 
                                mode='train',
-                               label='auto')
+                               label='ESRI')
     print(len(my_dataset.data[0]))
     # print(my_dataset.data[0])
 

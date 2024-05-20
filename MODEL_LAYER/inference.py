@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 
@@ -14,10 +15,8 @@ from torch.utils.data import DataLoader
 from torchmetrics import JaccardIndex
 
 from dataset import MLFluvDataset
-from UTILS.utils import parse_config_params, extract_patches, reconstruct_from_patches
+from UTILS.utils import load_config, extract_patches, reconstruct_from_patches
 from UTILS.plotter import plot_inference_result
-
-
 
 
 def infer_with_patches(img, net, config_params, preprocess_fn=None):
@@ -25,11 +24,7 @@ def infer_with_patches(img, net, config_params, preprocess_fn=None):
     device = config_params["trainer"]["device"]
     num_classes = config_params["trainer"]["classes"]
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
-    # checkpoint_path = f'./experiments/{log_num}/checkpoints/best_model.pth'
-
-    # save_root_folder = f'./experiments/{log_num}/predictions'
-    # os.makedirs(save_root_folder, exist_ok=True)
-
+ 
     net.eval()
 
     h, w, _ = img.shape
@@ -69,13 +64,26 @@ def infer_with_patches(img, net, config_params, preprocess_fn=None):
     return probs
 
 if __name__ == '__main__':
-    exp_folder = './experiments/1001'
+    ####################################
+    # PARSE CONFIG FILE
+    ####################################
+    parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
+    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
+
+    args = parser.parse_args()
+    config_params = load_config(args.config_path)
+
+    log_num = config_params["trainer"]["log_num"]
+
+    # load the config file again from saved experiments
+
+    exp_folder = f'script/experiments/{log_num}'
     output_folder = os.path.join(exp_folder, 'preds')
     os.makedirs(output_folder, exist_ok=True)
 
     SHOW_PLOTS = False
 
-    config_params = parse_config_params(os.path.join(exp_folder, 'config.json'))
+    config_params = load_config(os.path.join(exp_folder, 'config.yml'))
 
     log_num = config_params["trainer"]["log_num"]
     in_channels = config_params["trainer"]["in_channels"]
@@ -85,10 +93,11 @@ if __name__ == '__main__':
     lr = config_params["trainer"]["learning_rate"]
     batch_size = config_params["trainer"]["batch_size"]
     window_size = config_params["trainer"]["window_size"]
+    which_label = config_params['data_loader']['which_label']
 
     # LOGGING
 
-    logger.add(f'experiments/{config_params["trainer"]["log_num"]}/preds.log')
+    logger.add(f'script/experiments/{log_num}/preds.log')
 
     ENCODER = config_params['model']['encoder']
     ENCODER_WEIGHTS = None
@@ -107,12 +116,13 @@ if __name__ == '__main__':
                      ).to(device)
 
     test_set = MLFluvDataset(
-        config_params['data_loader']['args']['train_paths'],
+        data_path=f'data/fold_data/test_{which_label}_fold',
         mode='test',
-        label='auto',
-        folds = [4],
+        label=which_label,
+        folds = None,
         one_hot_encode=False      
     )
+    # print(test_set.num_classes)
 
     test_loader = DataLoader(test_set, batch_size=1, shuffle=False)  # TODO: workers
 

@@ -149,7 +149,7 @@ if __name__=='__main__':
     FLUV_POINT_ONLY = config['data_preprocess']['fluv_point_only']
     MOVE_DATA = config['data_preprocess']['move_data']
 
-    WHICH_LABEL = config['sample']['which_label']
+    WHICH_LABEL = config['data_loader']['which_label']
     SAMPLE_MODE = config['sample']['sample_mode']
 
     raw_data_path = f'data/full_data/'

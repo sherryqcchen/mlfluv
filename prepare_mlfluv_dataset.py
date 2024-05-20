@@ -9,4 +9,6 @@ subprocess.run(['python', 'script/DATA_LAYER/get_ee_data.py', '--config_path', '
 # Call the data preprocess script
 subprocess.run(['python', 'script/DATA_LAYER/label_prepare.py', '--config_path', 'script/config.yml'])
 
+# Split data into 5 folds for train, validation 
+# When change labels among ESRI, DW, ESAWC, only re-run this step
 subprocess.run(['python', 'script/DATA_LAYER/split_data.py', '--config_path', 'script/config.yml'])
