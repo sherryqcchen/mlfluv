@@ -2,15 +2,15 @@ ee_api_key: script/sen12flood-qiuyangchen-8fdb42008616.json
 ee_service_account: earthi-ubuntu@sen12flood-qiuyangchen.iam.gserviceaccount.com
   
 sample:
-  sample_mode: 'STRATIFIED' # RANDOM
-  sample_length: 24
+  sample_mode: STRATIFIED  # RANDOM
+  sample_length: 6000
   s1_bands: ['VV', 'VH']
   s2_bands: ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
   year: 2020
 
 data_loader:
   name: MLFluvDataset
-  which_label: DW # hand, ESRI, ESAWC 
+  which_label: ESAWC # DW, ESRI, ESAWC 
   train_paths: data/fold_data
   test_paths: data/labelled_data/test_dataset
 
@@ -27,28 +27,27 @@ plot_setting:
 model:
   encoder: resnet34
   loss_function: CrossEntropyLoss
-  weights: inverse_log
+  weights: inverse_count
+
+trainer:
+  log_num: 3002
+  mode: train # train, val, test, tune
+  train_fold: [0,1,2,3]
+  valid_fold: [4]
+  window_size: 512
+  epochs: 50
+  in_channels: 15
+  classes: 6
+  device: cuda
+  learning_rate: 0.0001
+  batch_size: 16
+  exp_folder: script/experiments
 
 incremental_learning:
   tune_log_num: 1
   temperature: 1
   distill_lamda: 0
   freeze_encoder: False
-
-trainer:
-  log_num: 1
-  mode: train # train, val, test, tune
-  train_fold: [0,1,2,3]
-  valid_fold: [4]
-  window_size: 512
-  epochs: 10
-  in_channels: 15
-  classes: 6
-  device: cuda
-  learning_rate: 0.0001
-  batch_size: 8
-  exp_folder: ./experiments
-
 
 
 
