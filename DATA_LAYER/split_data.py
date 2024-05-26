@@ -121,10 +121,6 @@ def get_s12label_list(WHICH_LABEL, data_path):
                 # label_arr[union_mask] = 0
 
             np.save(label_path, label_arr)
-
-        else:
-
-
             # print('After removing NaNs:', np.unique(label_arr))
 
         label_list.append(folder_path)
@@ -143,10 +139,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config_params = utils.load_config(args.config_path)
     sample_mode = config_params['sample']['sample_mode']
+    sample_length = config_params['sample']['sample_length'] 
     WHICH_LABEL = config_params['data_loader']['which_label']
     test_data_path = config_params['data_loader']['test_paths']
 
-    train_data_path = f'data/clean_data/mlfluv_s12lulc_data_clean_{sample_mode}'
+    train_data_path = f'data/clean_data/mlfluv_s12lulc_data_water_from_{sample_mode}_{sample_length}'
     print("Processing train data.")
     train_label_list = get_s12label_list(WHICH_LABEL, train_data_path)
     split_n_folds(5, train_label_list, save_dir=f'data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL)

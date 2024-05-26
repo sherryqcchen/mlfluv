@@ -44,9 +44,6 @@ def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
             print('No weight function is given. We use sklearn compute class weight function')
             weight = sklearn.utils.class_weight.compute_class_weight(class_weight='balanced', classes=classes, y=np.repeat(classes, frequencies))
 
-        # the weight for the background class 0 (clouds, snow/ice and no data) is not needed, so it should be zero out.
-        weight[0] = 0
-
         print(classes)
 
         # Create a DataFrame from the weights per class
@@ -64,6 +61,15 @@ def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
         # Fill missing weights with the mean weight of all classes exclusing the weight at index 0
         mean_weight = df.loc[df.index != 0, 'Weights'].mean()
         df = df.fillna(mean_weight)   # fillna(0) fill with zero
+
+                
+        if 0 in df['Class'].values:
+            # If 0 is present, set its weight to 0
+            df.loc[df['Class'] == 0, 'Weights'] = 0
+        else:
+            # If 0 is not present, append a new row with Class = 0 and Weights = 0
+            new_row = pd.DataFrame({'Class': [0], 'Weights': [0]})
+            df = pd.concat([df, new_row], ignore_index=True)
 
         # Save to CSV
         df.to_csv(f'script/MODEL_LAYER/{weight_func}_weights_{suffix}.csv', index=False)
