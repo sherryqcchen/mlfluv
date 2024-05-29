@@ -1,5 +1,6 @@
 # this script is for incremental learning 
 import argparse
+from itertools import islice
 import cv2
 import shutil
 import os
@@ -52,6 +53,7 @@ if __name__ == "__main__":
     batch_size = config_params["trainer"]["batch_size"]
     weight_func = config_params["model"]["weights"]
     window_size = config_params["trainer"]["window_size"]
+    with_extra_urban = config_params["incremental_learning"]['with_extra_urban']
     temperature = config_params["incremental_learning"]['temperature']
     distill_lamda = config_params["incremental_learning"]['distill_lamda']
     freeze_encoder = config_params["incremental_learning"]['freeze_encoder']
@@ -83,8 +85,10 @@ if __name__ == "__main__":
     old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
     print(f"{old_net.temperature=}")
 
-    fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_{which_label}_5_fold')
-
+    if with_extra_urban:
+        fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_with_urban_{which_label}_5_fold')
+    else:
+        fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_{which_label}_5_fold')
     train_set = MLFluvDataset(
         data_path=fold_data_path,
         mode='train',
@@ -187,7 +191,16 @@ if __name__ == "__main__":
         # calculate IoU
         test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
 
-        for i, (image, mask) in enumerate(test_loader):
+        # Initialize accumulators for accuracy metrics
+        total_tp, total_fp, total_fn, total_tn = 0, 0, 0, 0
+        total_tp_per_class = [0] * classes
+        total_fp_per_class = [0] * classes
+        total_fn_per_class = [0] * classes
+        total_tn_per_class = [0] * classes
+        # Initialize a list to hold the sum of IoU for each class across all images
+        sum_iou_per_class = [0] * classes
+
+        for i, (image, mask) in islice(enumerate(test_loader), 5):
             image, mask = image.to(device), mask.to(device)
             
             if int(window_size) == 512:
@@ -221,6 +234,13 @@ if __name__ == "__main__":
             test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
             test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
 
+            # Accumulate stats per class
+            for class_idx in range(classes):
+                total_tp_per_class[class_idx] += tp[class_idx]
+                total_fp_per_class[class_idx] += fp[class_idx]
+                total_fn_per_class[class_idx] += fn[class_idx]
+                total_tn_per_class[class_idx] += tn[class_idx]
+
             test_jaccard_index.update(y_pred_map, mask.cpu().squeeze().long())
             test_ious = test_jaccard_index.compute()
 
@@ -229,10 +249,14 @@ if __name__ == "__main__":
             for class_idx in range(classes):
                 class_iou = test_ious[class_idx]
                 class_wise_iou_test.append(class_iou.item())
+
+            # Sum the IoU for each class across all images
+            for iou_list in class_wise_iou_test:
+                for class_idx in range(classes):
+                    sum_iou_per_class[class_idx] += iou_list[class_idx]
             
             # Compute mean IoU across all classes
             test_miou = sum(class_wise_iou_test) / len(class_wise_iou_test)
-
             logger.info(f"Testing)")
             logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou, 3)}")
             logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_test}")
@@ -242,3 +266,42 @@ if __name__ == "__main__":
             logger.info(f"{'':<10}Recall{'':<1} ----> {round(test_recall.item(), 3)}")
             logger.info(f"{'':<10}Precision{'':<1} ----> {round(test_precision.item(), 3)}")
             logger.info(f"{'':<10}F1{'':<1} ----> {round(test_f1.item(), 3)}")
+
+            # Accumulate stats
+            total_tp += tp
+            total_fp += fp
+            total_fn += fn
+            total_tn += tn
+
+        # Compute class-wise IoU using total stats per class for the whole test dataset
+        class_wise_iou_test = []
+        for class_idx in range(classes):
+            class_iou = smp.metrics.iou_score(
+                total_tp_per_class[class_idx], 
+                total_fp_per_class[class_idx], 
+                total_fn_per_class[class_idx], 
+                total_tn_per_class[class_idx], 
+                reduction="none")
+            
+            class_wise_iou_test.append(class_iou.tolist())
+
+        # Compute mean IoU across all classes
+        test_miou = sum(sum(i) for i in class_wise_iou_test) / len(class_wise_iou_test)
+
+        # Compute metrics using total stats
+        test_micro_iou = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_macro_iou = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+        test_f1 = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_precision = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_accuracy = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_recall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+
+        logger.info(f"Overall Testing Result)")
+        logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou, 3)}")
+        logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_test}")
+        logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(test_micro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(test_macro_iou.item(), 3)}")
+        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(test_accuracy.item(), 3)}")
+        logger.info(f"{'':<10}Recall{'':<1} ----> {round(test_recall.item(), 3)}")
+        logger.info(f"{'':<10}Precision{'':<1} ----> {round(test_precision.item(), 3)}")
+        logger.info(f"{'':<10}F1{'':<1} ----> {round(test_f1.item(), 3)}")

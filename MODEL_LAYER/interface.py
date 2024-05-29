@@ -111,8 +111,8 @@ class MLFluvUnetInterface():
             # LOGGING
             logger.add(f'script/experiments/{self.log_num}/info.log')
 
-            os.makedirs(f'./experiments/{log_num}', exist_ok=True)
-            os.makedirs(f'./experiments/{log_num}/checkpoints', exist_ok=True)
+            os.makedirs(f'script/experiments/{log_num}', exist_ok=True)
+            os.makedirs(f'script/experiments/{log_num}/checkpoints', exist_ok=True)
 
             shutil.copy('script/config.yml', os.path.join(f'script/experiments/{log_num}', 'config.yml'))
             shutil.copy(f'script/MODEL_LAYER/dataset.py', os.path.join(f'script/experiments/{log_num}', f'dataset.py'))
