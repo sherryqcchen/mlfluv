@@ -1,6 +1,5 @@
 # this script is for incremental learning 
 import argparse
-from itertools import islice
 import cv2
 import shutil
 import os
@@ -158,7 +157,7 @@ if __name__ == "__main__":
         old_model=old_net
     )
     
-    interface.train(epochs=epochs, eval_interval=5)
+    # interface.train(epochs=epochs, eval_interval=5)
 
     # Making predictions
     if args.if_predict is True:
@@ -200,7 +199,9 @@ if __name__ == "__main__":
         # Initialize a list to hold the sum of IoU for each class across all images
         sum_iou_per_class = [0] * classes
 
-        for i, (image, mask) in islice(enumerate(test_loader), 5):
+        mIoUs = []
+
+        for i, (image, mask) in enumerate(test_loader):
             image, mask = image.to(device), mask.to(device)
             
             if int(window_size) == 512:
@@ -249,11 +250,6 @@ if __name__ == "__main__":
             for class_idx in range(classes):
                 class_iou = test_ious[class_idx]
                 class_wise_iou_test.append(class_iou.item())
-
-            # Sum the IoU for each class across all images
-            for iou_list in class_wise_iou_test:
-                for class_idx in range(classes):
-                    sum_iou_per_class[class_idx] += iou_list[class_idx]
             
             # Compute mean IoU across all classes
             test_miou = sum(class_wise_iou_test) / len(class_wise_iou_test)
@@ -273,20 +269,35 @@ if __name__ == "__main__":
             total_fn += fn
             total_tn += tn
 
-        # Compute class-wise IoU using total stats per class for the whole test dataset
-        class_wise_iou_test = []
-        for class_idx in range(classes):
-            class_iou = smp.metrics.iou_score(
-                total_tp_per_class[class_idx], 
-                total_fp_per_class[class_idx], 
-                total_fn_per_class[class_idx], 
-                total_tn_per_class[class_idx], 
-                reduction="none")
+            mIoUs.append(test_miou)
+
+        # # Compute class-wise IoU using total stats per class for the whole test dataset
+        # class_wise_iou_test = []
+        # for class_idx in range(classes):
+        #     class_iou = smp.metrics.iou_score(
+        #         total_tp_per_class[class_idx], 
+        #         total_fp_per_class[class_idx], 
+        #         total_fn_per_class[class_idx], 
+        #         total_tn_per_class[class_idx], 
+        #         reduction="none")
             
-            class_wise_iou_test.append(class_iou.tolist())
+        #     class_wise_iou_test.append(class_iou.tolist())
+        
+        # # Sum the IoU for each class across all images
+        # for iou_list in class_wise_iou_test:
+        #     for class_idx in range(classes):
+        #         sum_iou_per_class[class_idx] += iou_list[class_idx]
 
         # Compute mean IoU across all classes
-        test_miou = sum(sum(i) for i in class_wise_iou_test) / len(class_wise_iou_test)
+        # The following mIoU calculates sum (intersection of all images) / sum (union of all images)
+        # This mIoU is higher and more biased to the majority class
+        # test_miou_overall = sum(sum_iou_per_class) / (len(class_wise_iou_test) * classes)
+        
+        # class_wise_iou_overall = [i/classes for i in sum_iou_per_class]
+
+        # We use mIoU calculated by mean (sum (mIoU of each image)), which is more sensitive to the accuracy of minority classes
+        test_miou_overall = sum(mIoUs)/len(mIoUs)
+
 
         # Compute metrics using total stats
         test_micro_iou = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
@@ -297,8 +308,8 @@ if __name__ == "__main__":
         test_recall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="micro")
 
         logger.info(f"Overall Testing Result)")
-        logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou, 3)}")
-        logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_test}")
+        logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou_overall, 3)}")
+        # logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_test}")
         logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(test_micro_iou.item(), 3)}")
         logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(test_macro_iou.item(), 3)}")
         logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(test_accuracy.item(), 3)}")
