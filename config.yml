@@ -12,10 +12,10 @@ data_preprocess:
 ee_api_key: script/sen12flood-qiuyangchen-8fdb42008616.json
 ee_service_account: earthi-ubuntu@sen12flood-qiuyangchen.iam.gserviceaccount.com
 incremental_learning:
-  distill_lamda: 0.25
+  distill_lamda: 1
   freeze_encoder: false
-  temperature: 2
-  tune_log_num: 11
+  temperature: 10
+  tune_log_num: 1
   with_extra_urban: true
 model:
   encoder: resnet34
@@ -48,7 +48,7 @@ trainer:
   batch_size: 16
   classes: 6
   device: cuda
-  epochs: 2
+  epochs: 50
   exp_folder: script/experiments
   in_channels: 15
   learning_rate: 0.0001

@@ -369,7 +369,9 @@ def download_1_point_data(coords, river_order,
                 # We also use lng, lat info in the point_id 
             point_id = s2_id + "_" + coord_string
 
-            data_path = 'data/full_data/mlfluv_s12lulc_data_STRATIFIED'
+            # data_path = 'data/full_data/mlfluv_s12lulc_data_STRATIFIED'
+            data_path = f'data/full_data/mlfluv_s12lulc_data_{SAMPLE_MODE}'
+
             point_path = os.path.join(data_path, point_id) 
 
             if not os.path.exists(point_path):
@@ -439,7 +441,9 @@ if __name__ == "__main__":
         ee.Authenticate()
         ee.Initialize()
 
-    points_path = Path(f'data/Amazon_HydroSHEDS_river_networks/network_points_{SAMPLE_LENGTH}_{SAMPLE_MODE}.csv')
+    # points_path = Path(f'data/Amazon_HydroSHEDS_river_networks/network_points_{SAMPLE_LENGTH}_{SAMPLE_MODE}.csv')
+    points_path = Path(f'data/Amazon_HydroSHEDS_river_networks/network_points_{SAMPLE_MODE}.csv')
+
     
     point_list = []
 

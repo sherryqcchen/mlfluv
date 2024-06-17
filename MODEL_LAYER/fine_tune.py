@@ -157,7 +157,7 @@ if __name__ == "__main__":
         old_model=old_net
     )
     
-    # interface.train(epochs=epochs, eval_interval=5)
+    interface.train(epochs=epochs, eval_interval=5)
 
     # Making predictions
     if args.if_predict is True:
