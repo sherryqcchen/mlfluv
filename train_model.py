@@ -17,7 +17,7 @@ with open('script/config.yml', 'r') as f:
     config = yaml.safe_load(f)
 
 # Define the grid for temperature and distill_lamda
-param_grid = {'temperature': [0.1, 0.5, 2, 10], 'distill_lamda': [0, 0.25, 0.5, 0.75, 1]}
+param_grid = {'temperature': [1, 0.1, 0.5, 2, 10], 'distill_lamda': [0, 0.25, 0.5, 0.75, 1]}
 
 # Create the parameter grid
 grid = ParameterGrid(param_grid)

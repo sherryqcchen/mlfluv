@@ -296,7 +296,7 @@ if __name__ == "__main__":
 
     client = Auth.from_key(API_KEY)
 
-    data_path = '/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/data_sediment_rich_samples_labelled'
+    data_path = '/exports/csce/datastore/geos/users/s2135982/rivertools/mlfluv/data/clean_data/mlfluv_s12lulc_data_clean_urban'
     point_path_list = [os.path.join(data_path, folder) for folder in os.listdir(data_path) if not folder.endswith('.db')]
 
     sub_lists = [point_path_list[x:x+100] for x in range(0, len(point_path_list), 100)]
