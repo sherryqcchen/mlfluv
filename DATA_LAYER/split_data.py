@@ -147,12 +147,12 @@ if __name__ == '__main__':
     train_data_path = f'data/clean_data/mlfluv_s12lulc_data_water_from_{sample_mode}_{sample_length}'
     print("Processing train data.")
     train_label_list = get_s12label_list(WHICH_LABEL, train_data_path)
-    split_n_folds(5, train_label_list, save_dir=f'data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL)
+    split_n_folds(5, train_label_list, save_dir=f'/mnt/ceph_rbd/data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL)
 
     if not args.split_train_only:
         # Getting the folder list for sediment and bare class seperation
         print('Processing sediment data.')
-        sediment_label_list = get_s12label_list(WHICH_LABEL, f'data/clean_data/mlfluv_incremental_data_sediment')
+        sediment_label_list = get_s12label_list(WHICH_LABEL, f'/mnt/ceph_rbd/data/clean_data/mlfluv_incremental_data_sediment')
         print('Processing bare data.')
         bare_label_list = get_s12label_list(WHICH_LABEL, f'data/clean_data/mlfluv_incremental_data_bare')
         print('Processing urban data.')

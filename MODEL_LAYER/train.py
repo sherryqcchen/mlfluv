@@ -48,21 +48,21 @@ if __name__ == "__main__":
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
 
-    weights_path = f"script/MODEL_LAYER/{weight_func}_weights_{which_label}.csv"
+    weights_path = f"/mnt/ceph_rbd/script/MODEL_LAYER/{weight_func}_weights_{which_label}.csv"
 
     print(f"Train for log {log_num}")
 
     # LOGGING
 
-    logger.add(f'script/experiments/{config_params["trainer"]["log_num"]}/info.log')
+    logger.add(f'/mnt/ceph_rbd/script/experiments/{config_params["trainer"]["log_num"]}/info.log')
     # writer = SummaryWriter(f'./experiments/{log_num}/tensorboard')
 
-    os.makedirs(f'script/experiments/{log_num}', exist_ok=True)
-    os.makedirs(f'script/experiments/{log_num}/checkpoints', exist_ok=True)
+    os.makedirs(f'/mnt/ceph_rbd/script/experiments/{log_num}', exist_ok=True)
+    os.makedirs(f'/mnt/ceph_rbd/script/experiments/{log_num}/checkpoints', exist_ok=True)
 
-    shutil.copy('script/config.yml', os.path.join(f'script/experiments/{log_num}', 'config.yml'))
-    shutil.copy(f'script/MODEL_LAYER/dataset.py', os.path.join(f'script/experiments/{log_num}', f'dataset.py'))
-    shutil.copy(f'script/MODEL_LAYER/train.py', os.path.join(f'script/experiments/{log_num}', f'train.py'))
+    shutil.copy('/mnt/ceph_rbd/script/config.yml', os.path.join(f'/mnt/ceph_rbd/script/experiments/{log_num}', 'config.yml'))
+    shutil.copy(f'/mnt/ceph_rbd/script/MODEL_LAYER/dataset.py', os.path.join(f'/mnt/ceph_rbd/script/experiments/{log_num}', f'dataset.py'))
+    shutil.copy(f'/mnt/ceph_rbd/script/MODEL_LAYER/train.py', os.path.join(f'/mnt/ceph_rbd/script/experiments/{log_num}', f'train.py'))
 
     # MODEL PARAMS
 

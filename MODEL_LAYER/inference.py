@@ -77,7 +77,7 @@ if __name__ == '__main__':
 
     # load the config file again from saved experiments
 
-    exp_folder = f'script/experiments/{log_num}'
+    exp_folder = f'/mnt/ceph_rbd/script/experiments/{log_num}'
     output_folder = os.path.join(exp_folder, 'preds')
     os.makedirs(output_folder, exist_ok=True)
 
@@ -97,7 +97,7 @@ if __name__ == '__main__':
 
     # LOGGING
 
-    logger.add(f'script/experiments/{log_num}/preds.log')
+    logger.add(f'/mnt/ceph_rbd/script/experiments/{log_num}/preds.log')
 
     ENCODER = config_params['model']['encoder']
     ENCODER_WEIGHTS = None
@@ -116,7 +116,7 @@ if __name__ == '__main__':
                      ).to(device)
 
     test_set = MLFluvDataset(
-        data_path=f'data/fold_data/test_{which_label}_fold',
+        data_path=f'/mnt/ceph_rbd/data/fold_data/test_{which_label}_fold',
         mode='test',
         label=which_label,
         folds = None,

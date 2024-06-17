@@ -61,13 +61,13 @@ if __name__ == "__main__":
     ENCODER_WEIGHTS = None
     ACTIVATION = None
 
-    exp_folder = f'script/experiments/{log_num}'
-    output_folder =f'script/experiments/{log_num}/{tune_mode}'
+    exp_folder = f'/mnt/ceph_rbd/script/experiments/{log_num}'
+    output_folder =f'/mnt/ceph_rbd/script/experiments/{log_num}/{tune_mode}'
     os.makedirs(output_folder, exist_ok=True)
 
     SHOW_PLOTS = False
 
-    weights_path = f"script/MODEL_LAYER/{weight_func}_weights_{which_label}_fintune.csv"
+    weights_path = f"/mnt/ceph_rbd/script/MODEL_LAYER/{weight_func}_weights_{which_label}_fintune.csv"
 
     print(f'Fine tune {tune_mode} for log {log_num}')
     print(f"{temperature = }")
@@ -77,8 +77,8 @@ if __name__ == "__main__":
     logger.add(os.path.join(output_folder, 'info.log'))
 
     os.makedirs(os.path.join(output_folder, 'checkpoints'), exist_ok=True)
-    shutil.copy(f'script/MODEL_LAYER/fine_tune.py', os.path.join(output_folder, 'fine_tune.py'))
-    shutil.copy('script/config.yml', os.path.join(output_folder, 'config.yml'))
+    shutil.copy(f'/mnt/ceph_rbd/script/MODEL_LAYER/fine_tune.py', os.path.join(output_folder, 'fine_tune.py'))
+    shutil.copy('/mnt/ceph_rbd/script/config.yml', os.path.join(output_folder, 'config.yml'))
 
     # create an untrained model, with one extra class in num_classes
     old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
@@ -171,7 +171,7 @@ if __name__ == "__main__":
         logger.add(os.path.join(output_folder,'preds.log'))
 
         test_set = MLFluvDataset(
-            data_path=f'data/fold_data/test_{which_label}_fold',
+            data_path=f'/mnt/ceph_rbd/data/fold_data/test_{which_label}_fold',
             mode='test',
             label='hand',
             folds = None,
