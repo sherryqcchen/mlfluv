@@ -1,8 +1,8 @@
 name: ci
 on:
   push:
-    paths:
-      - 'script/docker/**'
+    branches:
+      - 'main'
 
 jobs:
   docker:
