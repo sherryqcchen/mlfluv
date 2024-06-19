@@ -23,8 +23,9 @@ from dataset import MLFluvDataset
 from interface import MLFluvUnetInterface
 from weight_calculator import get_class_weight
 from inference import infer_with_patches
+from UTILS import utils
 from UTILS.utils import load_config
-from UTILS.plotter import plot_inference_result, utils
+from UTILS.plotter import plot_inference_result
 
 
 if __name__ == "__main__":
