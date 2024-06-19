@@ -11,6 +11,16 @@ import os
 from loguru import logger
 from torch.utils.tensorboard import SummaryWriter
 
+from UTILS import utils
+
+root_path = ''
+root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+
+if is_vm:
+    config_path = os.path.join(root_path,'script/config.yml')
+else:
+    config_path = os.path.join(root_path, 'script/config_k8s.yml')
+
 class MLFluvUnetInterface():
     """
     Train interface for semantic segmentation on MLFluv dataset.
@@ -65,9 +75,9 @@ class MLFluvUnetInterface():
         self.mode = mode
 
         if self.mode == "initial_train":
-            self.best_model_path = f'script/experiments/{self.log_num}/checkpoints/best_model.pth'
+            self.best_model_path = os.path.join(root_path, f'script/experiments/{self.log_num}/checkpoints/best_model.pth')
         else:
-            self.best_model_path = f'script/experiments/{self.log_num}/{self.mode}/checkpoints/best_model.pth'
+            self.best_model_path = os.path.join(root_path, f'script/experiments/{self.log_num}/{self.mode}/checkpoints/best_model.pth')
 
         self.old_model = old_model
 
@@ -109,14 +119,14 @@ class MLFluvUnetInterface():
 
         if self.log_num is not None:
             # LOGGING
-            logger.add(f'script/experiments/{self.log_num}/info.log')
+            logger.add(os.path.join(root_path, f'script/experiments/{self.log_num}/info.log'))
 
-            os.makedirs(f'script/experiments/{log_num}', exist_ok=True)
-            os.makedirs(f'script/experiments/{log_num}/checkpoints', exist_ok=True)
+            os.makedirs(os.path.join(root_path, f'script/experiments/{log_num}'), exist_ok=True)
+            os.makedirs(os.path.join(root_path, f'script/experiments/{log_num}/checkpoints'), exist_ok=True)
 
-            shutil.copy('script/config.yml', os.path.join(f'script/experiments/{log_num}', 'config.yml'))
-            shutil.copy(f'script/MODEL_LAYER/dataset.py', os.path.join(f'script/experiments/{log_num}', f'dataset.py'))
-            shutil.copy(f'script/MODEL_LAYER/train.py', os.path.join(f'script/experiments/{log_num}', f'train.py'))
+            shutil.copy(config_path, os.path.join(os.path.join(root_path, f'script/experiments/{log_num}'), 'config.yml'))
+            shutil.copy(os.path.join(root_path, f'script/MODEL_LAYER/dataset.py'), os.path.join(os.path.join(root_path, f'script/experiments/{log_num}'), f'dataset.py'))
+            shutil.copy(os.path.join(root_path, f'script/MODEL_LAYER/train.py'), os.path.join(os.path.join(root_path, f'script/experiments/{log_num}'), f'train.py'))
 
     def train_1epoch(self, epoch_idx):
         # train on one epoch and calculate train loss

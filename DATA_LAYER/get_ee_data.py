@@ -22,9 +22,9 @@ root_path = ''
 root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
 
 if is_vm:
-    config_path = os.path.join(root_path,'config.yml')
+    config_path = os.path.join(root_path,'script/config.yml')
 else:
-    config_path = os.path.join(root_path, 'config_k8s.yml')
+    config_path = os.path.join(root_path, 'script/config_k8s.yml')
 
 
 def all_exist(full_list, given_list):

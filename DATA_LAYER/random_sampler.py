@@ -16,9 +16,9 @@ if __name__=='__main__':
     root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
 
     if is_vm:
-        config_path = os.path.join(root_path,'config.yml')
+        config_path = os.path.join(root_path,'script/config.yml')
     else:
-        config_path = os.path.join(root_path, 'config_k8s.yml')
+        config_path = os.path.join(root_path, 'script/config_k8s.yml')
 
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for sampling points along HydroSHEDS river network.")
     parser.add_argument('--config_path',type=str, default=config_path,help='Path to a configuration yaml file.' )

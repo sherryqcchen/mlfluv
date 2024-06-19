@@ -12,6 +12,14 @@ import sklearn
 from dataset import MLFluvDataset
 from UTILS import utils
 
+root_path = ''
+root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+
+if is_vm:
+    config_path = os.path.join(root_path,'script/config.yml')
+else:
+    config_path = os.path.join(root_path, 'script/config_k8s.yml')
+
 def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
         # get weights based on the pixel count of each class in train set 
         # calculation refer to a post: 
@@ -72,7 +80,7 @@ def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
             df = pd.concat([df, new_row], ignore_index=True)
 
         # Save to CSV
-        df.to_csv(f'script/MODEL_LAYER/{weight_func}_weights_{suffix}.csv', index=False)
+        df.to_csv(os.path.join(root_path, f'script/MODEL_LAYER/{weight_func}_weights_{suffix}.csv'), index=False)
 
         return df['Weights']
 
@@ -83,7 +91,7 @@ if __name__ == "__main__":
     # PARSE CONFIG FILE
     ####################################
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
-    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
+    parser.add_argument('--config_path',type=str, default=config_path, help='Path to a configuration yaml file.' )
 
     args = parser.parse_args()
     config_params = utils.load_config(args.config_path)
