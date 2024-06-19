@@ -24,15 +24,23 @@ from interface import MLFluvUnetInterface
 from weight_calculator import get_class_weight
 from inference import infer_with_patches
 from UTILS.utils import load_config
-from UTILS.plotter import plot_inference_result
+from UTILS.plotter import plot_inference_result, utils
 
 
 if __name__ == "__main__":
+
+    root_path = ''
+    root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+
+    if is_vm:
+        config_path = os.path.join(root_path,'config.yml')
+    else:
+        config_path = os.path.join(root_path, 'config_k8s.yml')
     ####################################
     # PARSE CONFIG FILE
     ####################################
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
-    parser.add_argument('--config_path',type=str, default='script/config.yml', help='Path to a configuration yaml file.' )
+    parser.add_argument('--config_path',type=str, default=config_path, help='Path to a configuration yaml file.' )
     parser.add_argument('--if_predict',type=bool,default=True, help='True if make prediction using fine-tuned model.')
     args = parser.parse_args()
 
@@ -61,13 +69,13 @@ if __name__ == "__main__":
     ENCODER_WEIGHTS = None
     ACTIVATION = None
 
-    exp_folder = f'/mnt/ceph_rbd/script/experiments/{log_num}'
-    output_folder =f'/mnt/ceph_rbd/script/experiments/{log_num}/{tune_mode}'
+    exp_folder = os.path.join(root_path, f'script/experiments/{log_num}')
+    output_folder = os.path.join(root_path, f'script/experiments/{log_num}/{tune_mode}')
     os.makedirs(output_folder, exist_ok=True)
 
     SHOW_PLOTS = False
 
-    weights_path = f"/mnt/ceph_rbd/script/MODEL_LAYER/{weight_func}_weights_{which_label}_fintune.csv"
+    weights_path = os.path.join(root_path, f"script/MODEL_LAYER/{weight_func}_weights_{which_label}_fintune.csv")
 
     print(f'Fine tune {tune_mode} for log {log_num}')
     print(f"{temperature = }")
@@ -77,8 +85,8 @@ if __name__ == "__main__":
     logger.add(os.path.join(output_folder, 'info.log'))
 
     os.makedirs(os.path.join(output_folder, 'checkpoints'), exist_ok=True)
-    shutil.copy(f'/mnt/ceph_rbd/script/MODEL_LAYER/fine_tune.py', os.path.join(output_folder, 'fine_tune.py'))
-    shutil.copy('/mnt/ceph_rbd/script/config.yml', os.path.join(output_folder, 'config.yml'))
+    shutil.copy(os.path.join(root_path, f'script/MODEL_LAYER/fine_tune.py'), os.path.join(output_folder, 'fine_tune.py'))
+    shutil.copy(config_path, os.path.join(output_folder, 'config.yml'))
 
     # create an untrained model, with one extra class in num_classes
     old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
@@ -171,10 +179,10 @@ if __name__ == "__main__":
         logger.add(os.path.join(output_folder,'preds.log'))
 
         test_set = MLFluvDataset(
-            data_path=f'/mnt/ceph_rbd/data/fold_data/test_{which_label}_fold',
+            data_path=os.path.join(root_path, f'data/fold_data/test_{which_label}_fold'),
             mode='test',
             label='hand',
-            folds = None,
+            folds=None,
             one_hot_encode=False      
         )
     

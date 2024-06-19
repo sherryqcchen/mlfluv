@@ -18,6 +18,14 @@ from gee_s1_ard.python_api import wrapper as wp
 from UTILS import plotter
 from UTILS import utils
 
+root_path = ''
+root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+
+if is_vm:
+    config_path = os.path.join(root_path,'config.yml')
+else:
+    config_path = os.path.join(root_path, 'config_k8s.yml')
+
 
 def all_exist(full_list, given_list):
     """
@@ -419,7 +427,7 @@ def download_1_point_data(coords, river_order,
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for downloading data from Earth Engine API. Remember to apply for a EE authentication key as well.")
-    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
+    parser.add_argument('--config_path',type=str, default=config_path,help='Path to a configuration yaml file.' )
 
     args = parser.parse_args()
     config = utils.load_config(args.config_path)

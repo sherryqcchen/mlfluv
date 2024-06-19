@@ -23,11 +23,19 @@ from weight_calculator import get_class_weight
 
 if __name__ == "__main__":
 
+    root_path = ''
+    root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+
+    if is_vm:
+        config_path = os.path.join(root_path,'config.yml')
+    else:
+        config_path = os.path.join(root_path, 'config_k8s.yml')
+
     ####################################
     # PARSE CONFIG FILE
     ####################################
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
-    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
+    parser.add_argument('--config_path',type=str, default=config_path, help='Path to a configuration yaml file.' )
 
     args = parser.parse_args()
     config_params = utils.load_config(args.config_path)
@@ -48,21 +56,23 @@ if __name__ == "__main__":
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
 
-    weights_path = f"/mnt/ceph_rbd/script/MODEL_LAYER/{weight_func}_weights_{which_label}.csv"
+    weights_path = os.path.join(root_path, f"script/MODEL_LAYER/{weight_func}_weights_{which_label}.csv")
 
     print(f"Train for log {log_num}")
 
     # LOGGING
 
-    logger.add(f'/mnt/ceph_rbd/script/experiments/{config_params["trainer"]["log_num"]}/info.log')
+    logger.add(os.path.join(root_path, f'script/experiments/{config_params["trainer"]["log_num"]}/info.log'))
+
+    log_path = os.path.join(root_path,f'script/experiments/{log_num}')
     # writer = SummaryWriter(f'./experiments/{log_num}/tensorboard')
 
-    os.makedirs(f'/mnt/ceph_rbd/script/experiments/{log_num}', exist_ok=True)
-    os.makedirs(f'/mnt/ceph_rbd/script/experiments/{log_num}/checkpoints', exist_ok=True)
+    os.makedirs(log_path, exist_ok=True)
+    os.makedirs(os.path.join(log_path, 'checkpoints'), exist_ok=True)
 
-    shutil.copy('/mnt/ceph_rbd/script/config.yml', os.path.join(f'/mnt/ceph_rbd/script/experiments/{log_num}', 'config.yml'))
-    shutil.copy(f'/mnt/ceph_rbd/script/MODEL_LAYER/dataset.py', os.path.join(f'/mnt/ceph_rbd/script/experiments/{log_num}', f'dataset.py'))
-    shutil.copy(f'/mnt/ceph_rbd/script/MODEL_LAYER/train.py', os.path.join(f'/mnt/ceph_rbd/script/experiments/{log_num}', f'train.py'))
+    shutil.copy(config_path, os.path.join(log_path, 'config.yml'))
+    shutil.copy(os.path.join(root_path, f'script/MODEL_LAYER/dataset.py'), os.path.join(log_path, f'dataset.py'))
+    shutil.copy(os.path.join(root_path,f'script/MODEL_LAYER/train.py'), os.path.join(log_path, f'train.py'))
 
     # MODEL PARAMS
 

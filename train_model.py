@@ -1,19 +1,29 @@
+import os
 import subprocess
 import yaml
 from sklearn.model_selection import ParameterGrid
+from UTILS import utils
+
+script_path = 'script/'
+script_path, is_vm = utils.update_root_path_for_machine(root_path=script_path)
+
+if is_vm:
+    config_path = os.path.join(script_path,'config.yml')
+else:
+    config_path = os.path.join(script_path, 'config_k8s.yml')
 
 # Split data into 5 folds for train, validation 
 # When change labels among ESRI, DW, ESAWC, only re-run this step
-# subprocess.run(['python', 'script/DATA_LAYER/split_data.py', '--config_path', 'script/config.yml'])
+# subprocess.run(['python', os.path.join(script_path,'DATA_LAYER/split_data.py'), '--config_path', config_path])
 
 # Train initial UNet model with a given label from existing LULC maps
-# subprocess.run(['python', 'script/MODEL_LAYER/train.py', '--config_path', 'script/config.yml'])
+# subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/train.py', '--config_path'), config_path])
 # Make predition on the trained model
-# subprocess.run(['python', 'script/MODEL_LAYER/inference.py', '--config_path', 'script/config.yml'])
+# subprocess.run(['python', 'os.path.join(script_path,'MODEL_LAYER/inference.py'), '--config_path', config_path])
 # Fine tune the model by add a new class (sediment), using new data for training as well.
 
 # Grid search to tune hyperparameters for incremental learning
-with open('script/config.yml', 'r') as f:
+with open(config_path, 'r') as f:
     config = yaml.safe_load(f)
 
 # Define the grid for temperature and distill_lamda
@@ -35,4 +45,4 @@ for params in grid:
     with open('script/config.yml', 'w') as f:
         yaml.safe_dump(config, f)
     
-    subprocess.run(['python', 'script/MODEL_LAYER/fine_tune.py', '--config_path', 'script/config.yml'])
+    subprocess.run(['python', os.path.join(script_path, 'MODEL_LAYER/fine_tune.py'), '--config_path', config_path])

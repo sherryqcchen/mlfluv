@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from torchmetrics import JaccardIndex
 
 from dataset import MLFluvDataset
-from UTILS.utils import load_config, extract_patches, reconstruct_from_patches
+from UTILS.utils import load_config, extract_patches, reconstruct_from_patches, utils
 from UTILS.plotter import plot_inference_result
 
 
@@ -64,11 +64,19 @@ def infer_with_patches(img, net, config_params, preprocess_fn=None):
     return probs
 
 if __name__ == '__main__':
+
+    root_path = ''
+    root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+
+    if is_vm:
+        config_path = os.path.join(root_path,'config.yml')
+    else:
+        config_path = os.path.join(root_path, 'config_k8s.yml')
     ####################################
     # PARSE CONFIG FILE
     ####################################
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
-    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
+    parser.add_argument('--config_path',type=str, default=config_path, help='Path to a configuration yaml file.' )
 
     args = parser.parse_args()
     config_params = load_config(args.config_path)
@@ -77,7 +85,7 @@ if __name__ == '__main__':
 
     # load the config file again from saved experiments
 
-    exp_folder = f'/mnt/ceph_rbd/script/experiments/{log_num}'
+    exp_folder = os.path.join(root_path, f'script/experiments/{log_num}')
     output_folder = os.path.join(exp_folder, 'preds')
     os.makedirs(output_folder, exist_ok=True)
 
@@ -97,7 +105,7 @@ if __name__ == '__main__':
 
     # LOGGING
 
-    logger.add(f'/mnt/ceph_rbd/script/experiments/{log_num}/preds.log')
+    logger.add(os.path.join(root_path,f'script/experiments/{log_num}/preds.log'))
 
     ENCODER = config_params['model']['encoder']
     ENCODER_WEIGHTS = None
@@ -116,7 +124,7 @@ if __name__ == '__main__':
                      ).to(device)
 
     test_set = MLFluvDataset(
-        data_path=f'/mnt/ceph_rbd/data/fold_data/test_{which_label}_fold',
+        data_path=os.path.join(root_path,f'data/fold_data/test_{which_label}_fold'),
         mode='test',
         label=which_label,
         folds = None,

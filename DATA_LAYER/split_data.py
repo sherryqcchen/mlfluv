@@ -129,11 +129,19 @@ def get_s12label_list(WHICH_LABEL, data_path):
 
 if __name__ == '__main__':
 
+    root_path = ''
+    root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+
+    if is_vm:
+        config_path = os.path.join(root_path,'config.yml')
+    else:
+        config_path = os.path.join(root_path, 'config_k8s.yml')
+
     ####################################
     # PARSE CONFIG FILE
     ####################################
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
-    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
+    parser.add_argument('--config_path',type=str, default=config_path, help='Path to a configuration yaml file.' )
     parser.add_argument('--split_train_only',type=bool,default=False, help='True if only train data is splited into folds.' )
 
     args = parser.parse_args()
@@ -144,32 +152,34 @@ if __name__ == '__main__':
     test_data_path = config_params['data_loader']['test_paths']
     with_extra_urban = config_params["incremental_learning"]['with_extra_urban']
 
-    train_data_path = f'data/clean_data/mlfluv_s12lulc_data_water_from_{sample_mode}_{sample_length}'
+    train_data_path = os.path.join(root_path, 
+                                   f'data/clean_data/mlfluv_s12lulc_data_water_from_{sample_mode}_{sample_length}')
     print("Processing train data.")
     train_label_list = get_s12label_list(WHICH_LABEL, train_data_path)
-    split_n_folds(5, train_label_list, save_dir=f'/mnt/ceph_rbd/data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL)
+    split_n_folds(5, train_label_list, save_dir = os.path.join(root_path, 
+                                                               f'data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL))
 
     if not args.split_train_only:
         # Getting the folder list for sediment and bare class seperation
         print('Processing sediment data.')
-        sediment_label_list = get_s12label_list(WHICH_LABEL, f'/mnt/ceph_rbd/data/clean_data/mlfluv_incremental_data_sediment')
+        sediment_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/clean_data/mlfluv_incremental_data_sediment'))
         print('Processing bare data.')
-        bare_label_list = get_s12label_list(WHICH_LABEL, f'data/clean_data/mlfluv_incremental_data_bare')
+        bare_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/clean_data/mlfluv_incremental_data_bare'))
         print('Processing urban data.')
-        urban_label_list = get_s12label_list(WHICH_LABEL, f'data/clean_data/mlfluv_s12lulc_data_clean_urban')
+        urban_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/clean_data/mlfluv_s12lulc_data_clean_urban'))
         # Concatenate lists into one list for incremental learning (fine tuning)
         if with_extra_urban:
             incremental_label_list = sediment_label_list + bare_label_list + urban_label_list
             print('Spliting incremental data: sediment, bareland and urban.')
-            split_n_folds(5, incremental_label_list, save_dir=f'data/fold_data/finetune_with_urban_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL)
+            split_n_folds(5, incremental_label_list, save_dir=os.path.join(root_path, f'data/fold_data/finetune_with_urban_{WHICH_LABEL}_5_fold'), which_label=WHICH_LABEL)
         else:
             incremental_label_list = sediment_label_list + bare_label_list
             print('Spliting incremental data: sediment and bareland.')
-            split_n_folds(5, incremental_label_list, save_dir=f'data/fold_data/finetune_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL)
+            split_n_folds(5, incremental_label_list, save_dir=os.path.join(root_path, f'data/fold_data/finetune_{WHICH_LABEL}_5_fold'), which_label=WHICH_LABEL)
         
         print('Processing test data.')
         test_label_list = get_s12label_list('hand', test_data_path)
 
         # Random shuffle train data and split them into 5 folds
         print('Spliting test data.')
-        split_n_folds(1, test_label_list, save_dir=f'data/fold_data/test_{WHICH_LABEL}_fold', which_label=WHICH_LABEL)
+        split_n_folds(1, test_label_list, save_dir=os.path.join(root_path, f'data/fold_data/test_{WHICH_LABEL}_fold'), which_label=WHICH_LABEL)

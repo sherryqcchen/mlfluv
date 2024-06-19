@@ -7,6 +7,29 @@ import yaml
 from zipfile import ZipFile
 from tqdm import tqdm
 
+import socket
+import os 
+
+def update_root_path_for_machine(root_path):
+    '''
+    Change root path for kubernates persistant volume claims (PVC). 
+    The root path will be updated with a prefix /mnt/ceph_rbd if it is in a PVC.
+    '''
+    # Get the hostname
+    hostname = socket.gethostname()
+    print(f"Hostname: {hostname}")
+
+    vm_list = ['lyon', 'eidf121']
+    if_vm = True
+
+    if any(substring in hostname for substring in vm_list):
+        print("This is in a virtual machine. No need to change file's root path.")
+    else:
+        print("This is in a K8s pod. Append '/mnt/ceph_rbd' in front of the root path.")
+        root_path = os.path.join('/mnt/ceph_rbd', root_path)
+        if_vm = False
+
+    return root_path, if_vm
 
 def parse_config_params(config_file):
     with open(config_file, 'r') as f:

@@ -136,8 +136,16 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, rema
 
 if __name__=='__main__':
 
+    root_path = ''
+    root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+
+    if is_vm:
+        config_path = os.path.join(root_path,'config.yml')
+    else:
+        config_path = os.path.join(root_path, 'config_k8s.yml')
+
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for preprocessing labels: functions include plotting, converting .npy to .tif, remapping bare pixels to sediment, handling NaNs in Sentinel and moving cleaned data to a new folder.")
-    parser.add_argument('--config_path',type=str, default='script/config.yml',help='Path to a configuration yaml file.' )
+    parser.add_argument('--config_path',type=str, default=config_path, help='Path to a configuration yaml file.' )
     
     args = parser.parse_args()
     config = utils.load_config(args.config_path)
@@ -152,7 +160,7 @@ if __name__=='__main__':
     WHICH_LABEL = config['data_loader']['which_label']
     SAMPLE_MODE = config['sample']['sample_mode']
 
-    raw_data_path = f'data/full_data/'
+    raw_data_path = os.path.join(root_path,f'data/full_data/')
     
     data_folder = [file for file in os.listdir(raw_data_path) if SAMPLE_MODE in file][0]
     data_path = os.path.join(raw_data_path, data_folder)
@@ -232,12 +240,12 @@ if __name__=='__main__':
         if FLUV_POINT_ONLY:
             if np.isin(dw_arr, 5).any():
                 fluvial_point_path.append(point_path)
-                filename = f'script/DATA_LAYER/{SAMPLE_MODE}_general_points.txt'
+                filename = os.path.join(root_path, f'script/DATA_LAYER/{SAMPLE_MODE}_general_points.txt')
             else:
                 continue
         else:
             fluvial_point_path.append(point_path)
-            filename = f'script/DATA_LAYER/{SAMPLE_MODE}_general_points.txt'
+            filename = os.path.join(root_path, f'script/DATA_LAYER/{SAMPLE_MODE}_general_points.txt')
 
     # copy a list of folders with water pixels to a new directory       
     print(f"The count of data points that have water and bare pixels: {len(fluvial_point_path)}")
@@ -249,7 +257,7 @@ if __name__=='__main__':
         f.writelines(fluvial_point_paths)
 
     # The path for storing the data after preprocess
-    dest_path = os.path.join('data/clean_data', f'mlfluv_s12lulc_data_clean_{SAMPLE_MODE}')
+    dest_path = os.path.join(os.path.join(root_path,'data/clean_data'), f'mlfluv_s12lulc_data_clean_{SAMPLE_MODE}')
     
 
     with open(filename, 'r') as f:
