@@ -8,10 +8,11 @@ WORKDIR /mlfluv
 ADD . /mlfluv
 
 # Install any needed packages specified in requirements.txt
-RUN conda create -n mlfluvnn --file pytorch_env.txt python=3.10.4 
+ENV CONDA_AUTO_UPDATE_CONDA="false"
+RUN conda create -n mlfluvnn --file pytorch_env.txt python=3.10.4 && conda clean --all --yes
 
 # Install necessary libraries for lxml
-RUN apt-get update && apt-get install -y libxml2-dev libxslt-dev
+RUN apt-get update && apt-get install -y --no-install-recommends libxml2-dev libxslt-dev && rm -rf /var/lib/apt/lists/*
 
 # Make port 80 available to the world outside this container
 EXPOSE 80
