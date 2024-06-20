@@ -142,6 +142,17 @@ if __name__ == '__main__':
 
     # calculate IoU
     test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
+    # Initialize accumulators for accuracy metrics
+    total_tp, total_fp, total_fn, total_tn = 0, 0, 0, 0
+    total_tp_per_class = [0] * classes
+    total_fp_per_class = [0] * classes
+    total_fn_per_class = [0] * classes
+    total_tn_per_class = [0] * classes
+    # Initialize a list to hold the sum of IoU for each class across all images
+    sum_iou_per_class = [0] * classes
+
+    mIoUs = []
+    class_IoUs = []
 
     for i, (image, mask) in enumerate(test_loader):
         image, mask = image.to(device), mask.to(device)
@@ -177,6 +188,12 @@ if __name__ == '__main__':
         test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
         test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
 
+        # Accumulate stats per class
+        for class_idx in range(classes):
+            total_tp_per_class[class_idx] += tp[class_idx]
+            total_fp_per_class[class_idx] += fp[class_idx]
+            total_fn_per_class[class_idx] += fn[class_idx]
+            total_tn_per_class[class_idx] += tn[class_idx]
         test_jaccard_index.update(y_pred_map, mask.cpu().squeeze().long())
         test_ious = test_jaccard_index.compute()
 
@@ -191,10 +208,41 @@ if __name__ == '__main__':
 
         logger.info(f"Testing)")
         logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou, 3)}")
-        logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_test}")
+        logger.info(f"{'':<10}Class wise IoU{'':<1} ----> {class_wise_iou_test}")
         logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(test_micro_iou.item(), 3)}")
         logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(test_macro_iou.item(), 3)}")
         logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(test_accuracy.item(), 3)}")
         logger.info(f"{'':<10}Recall{'':<1} ----> {round(test_recall.item(), 3)}")
         logger.info(f"{'':<10}Precision{'':<1} ----> {round(test_precision.item(), 3)}")
         logger.info(f"{'':<10}F1{'':<1} ----> {round(test_f1.item(), 3)}")
+        # Accumulate stats
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+        total_tn += tn
+
+        mIoUs.append(test_miou)
+        class_IoUs.append(class_wise_iou_test)
+    # We use mIoU calculated by mean (sum (mIoU of each image)), which is more sensitive to the accuracy of minority classes
+    test_miou_overall = sum(mIoUs)/len(mIoUs)
+    
+    # Calculate the mean class-wise IoU for all class-wise IoU per image
+    class_iou_overall = np.mean(np.array(class_IoUs), axis=0)
+
+    # Compute metrics using total stats
+    test_micro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+    test_macro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+    test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+    test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+    test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+    test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+
+    logger.info(f"Overall Testing Result)")
+    logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou_overall, 3)}")
+    logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(test_micro_iou_overall.item(), 3)}")
+    logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(test_macro_iou_overall.item(), 3)}")
+    logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(test_accuracy_overall.item(), 3)}")
+    logger.info(f"{'':<10}Recall{'':<1} ----> {round(test_recall_overall.item(), 3)}")
+    logger.info(f"{'':<10}Precision{'':<1} ----> {round(test_precision_overall.item(), 3)}")
+    logger.info(f"{'':<10}F1{'':<1} ----> {round(test_f1_overall.item(), 3)}")
+    logger.info(f"{'':<10}Class wise IoU{'':<1} ----> {class_iou_overall}")

@@ -209,6 +209,7 @@ if __name__ == "__main__":
         sum_iou_per_class = [0] * classes
 
         mIoUs = []
+        class_IoUs = []
 
         for i, (image, mask) in enumerate(test_loader):
             image, mask = image.to(device), mask.to(device)
@@ -262,9 +263,10 @@ if __name__ == "__main__":
             
             # Compute mean IoU across all classes
             test_miou = sum(class_wise_iou_test) / len(class_wise_iou_test)
+
             logger.info(f"Testing)")
             logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou, 3)}")
-            logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_test}")
+            logger.info(f"{'':<10}Class wise IoU{'':<1} ----> {class_wise_iou_test}")
             logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(test_micro_iou.item(), 3)}")
             logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(test_macro_iou.item(), 3)}")
             logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(test_accuracy.item(), 3)}")
@@ -279,6 +281,7 @@ if __name__ == "__main__":
             total_tn += tn
 
             mIoUs.append(test_miou)
+            class_IoUs.append(class_wise_iou_test)
 
         # # Compute class-wise IoU using total stats per class for the whole test dataset
         # class_wise_iou_test = []
@@ -307,21 +310,23 @@ if __name__ == "__main__":
         # We use mIoU calculated by mean (sum (mIoU of each image)), which is more sensitive to the accuracy of minority classes
         test_miou_overall = sum(mIoUs)/len(mIoUs)
 
+        # Calculate the mean class-wise IoU for all class-wise IoU per image
+        class_iou_overall = np.mean(np.array(class_IoUs), axis=0)
 
         # Compute metrics using total stats
-        test_micro_iou = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_macro_iou = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
-        test_f1 = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_precision = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_accuracy = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_recall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_micro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_macro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+        test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="micro")
 
         logger.info(f"Overall Testing Result)")
         logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou_overall, 3)}")
-        # logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_test}")
-        logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(test_micro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(test_macro_iou.item(), 3)}")
-        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(test_accuracy.item(), 3)}")
-        logger.info(f"{'':<10}Recall{'':<1} ----> {round(test_recall.item(), 3)}")
-        logger.info(f"{'':<10}Precision{'':<1} ----> {round(test_precision.item(), 3)}")
-        logger.info(f"{'':<10}F1{'':<1} ----> {round(test_f1.item(), 3)}")
+        logger.info(f"{'':<10}Micro IOU{'':<1} ----> {round(test_micro_iou_overall.item(), 3)}")
+        logger.info(f"{'':<10}Macro IOU{'':<1} ----> {round(test_macro_iou_overall.item(), 3)}")
+        logger.info(f"{'':<10}Accuracy{'':<1} ----> {round(test_accuracy_overall.item(), 3)}")
+        logger.info(f"{'':<10}Recall{'':<1} ----> {round(test_recall_overall.item(), 3)}")
+        logger.info(f"{'':<10}Precision{'':<1} ----> {round(test_precision_overall.item(), 3)}")
+        logger.info(f"{'':<10}F1{'':<1} ----> {round(test_f1_overall.item(), 3)}")
+        logger.info(f"{'':<10}Class wise IoU{'':<1} ----> {class_iou_overall}")

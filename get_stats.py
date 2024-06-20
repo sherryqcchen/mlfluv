@@ -23,13 +23,17 @@ def read_acc_from_log(log_path):
     with open(log_path, 'r') as file:
         lines = file.readlines()
         # print(file.read())
-        for line in lines[-8:]:
+        for line in lines[-9:]:
             if "Overall" in line:
                 inside_section = True
             elif inside_section:
                 metric_name, metric_value = line.split("---->")
                 metric_name = metric_name.split('-')[-1].strip()
-                metric_value = float(metric_value.strip())
+                try:
+                    metric_value = float(metric_value.strip())
+                except ValueError:
+                    values_str = metric_value.strip().strip('[]')  # Remove brackets
+                    float_values = [float(val) for val in values_str.split()]
                 if metric_name == "Mean IOU":
                     mean_iou.append(metric_value)
                 elif metric_name == "Micro IOU":
@@ -90,6 +94,7 @@ if __name__ == "__main__":
 
         init_config = find_files_by_patern(exp_path, 'config*.yml')[0]
         init_accuracy = find_files_by_patern(exp_path, 'preds.log')[0]
+        print(init_accuracy)
 
         df_acc_init = read_acc_from_log(init_accuracy)
         df_param_init = read_param_from_config(init_config)
