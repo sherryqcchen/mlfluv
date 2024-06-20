@@ -164,10 +164,16 @@ if __name__ == '__main__':
             y_pred = infer_with_patches(np.transpose(image.cpu().detach().numpy()[0, :, :], (1, 2, 0)), model, config_params)
 
         y_pred_map = torch.from_numpy(y_pred).argmax(dim=0)
-        print(np.unique(y_pred_map.numpy()))
+        print(f"Pred unique: {np.unique(y_pred_map.numpy())}")
 
         y = mask.cpu().detach().numpy()[0, :, :]
-        print(np.unique(y))
+        print(f"Label unique: {np.unique(y)}")
+        
+        # ESRI label for the initial train has very few 6 in it. Convert them to 5
+        if 6 in y:
+            y[y==6] = 5
+            print("Found it and fixed it.")
+            print(f"Fixed Label unique: {np.unique(y)}")
         
         # Plot the S2 rgb, S1 vv, maks and prediction
         s2_rgb = cv2.normalize(np.transpose(image.numpy()[0, 5:2:-1, :, :], (1,2,0)),
