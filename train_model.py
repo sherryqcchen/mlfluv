@@ -19,7 +19,7 @@ else:
 # Train initial UNet model with a given label from existing LULC maps
 # subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/train.py', '--config_path'), config_path])
 # Make predition on the trained model
-# subprocess.run(['python', 'os.path.join(script_path,'MODEL_LAYER/inference.py'), '--config_path', config_path])
+# subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/inference.py'), '--config_path', config_path])
 # Fine tune the model by add a new class (sediment), using new data for training as well.
 
 # Grid search to tune hyperparameters for incremental learning
