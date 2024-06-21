@@ -233,7 +233,7 @@ if __name__ == '__main__':
     test_miou_overall = sum(mIoUs)/len(mIoUs)
     
     # Calculate the mean class-wise IoU for all class-wise IoU per image
-    class_iou_overall = np.mean(np.array(class_IoUs), axis=0)
+    class_iou_overall = np.mean(np.array(class_IoUs), axis=0).tolist()
 
     # Compute metrics using total stats
     test_micro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")

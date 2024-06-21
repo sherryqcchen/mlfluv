@@ -42,7 +42,7 @@ for params in grid:
     config['incremental_learning']['tune_log_num'] += 1
     
     # Save the config back to yaml
-    with open('script/config.yml', 'w') as f:
+    with open(config_path, 'w') as f:
         yaml.safe_dump(config, f)
     
     subprocess.run(['python', os.path.join(script_path, 'MODEL_LAYER/fine_tune.py'), '--config_path', config_path])

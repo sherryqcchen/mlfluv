@@ -17,6 +17,7 @@ def find_files_by_patern(folder, pattern):
 def read_acc_from_log(log_path):
 
     class_iou = []
+    mean_iou, micro_iou, macro_iou, accuracy, recall, precision, f1 = 0, 0, 0, 0, 0, 0, 0
 
     # Open the log file and process each line
     inside_section = False
@@ -33,7 +34,8 @@ def read_acc_from_log(log_path):
                     metric_value = float(metric_value.strip())
                 except ValueError:
                     values_str = metric_value.strip().strip('[]')  # Remove brackets
-                    class_iou = [float(val) for val in values_str.split()]
+                    print(metric_value)
+                    class_iou = [float(val) for val in values_str.split(',')]
                 if metric_name == "Mean IOU":
                     mean_iou = metric_value
                 elif metric_name == "Micro IOU":
@@ -42,12 +44,12 @@ def read_acc_from_log(log_path):
                     macro_iou = metric_value
                 elif metric_name == "Accuracy":
                     accuracy = metric_value
-                elif metric_name == "Recall":
-                    recall = metric_value
+                # elif metric_name == "Recall":
+                #     recall = metric_value
                 elif metric_name == "Precision":
                     precision = metric_value
-                elif metric_name == "F1":
-                    f1 = metric_value
+                # elif metric_name == "F1":
+                #     f1 = metric_value
                 # elif metric_name == "Class wise IoU":
                 #     class_iou.append(float_value)
 
@@ -57,9 +59,9 @@ def read_acc_from_log(log_path):
         'Micro IoU': [micro_iou],
         'Macro IoU': [macro_iou],
         'Accuracy': [accuracy],
-        'Recall': [recall],
+        # 'Recall': [recall],
         'Precision': [precision],
-        'F1': [f1],
+        # 'F1': [f1],
         'Class wise IoU': [class_iou]
     })
 
@@ -139,10 +141,13 @@ if __name__ == "__main__":
     df = pd.concat(dfs, ignore_index=True)
     print(df)
 
-    wanted_columns = ['log_num', 'which_label', 'weights', 'tune_log_num','distill_lamda', 'temperature', 'Mean IoU', 'Micro IoU', 'Macro IoU', 'Accuracy', 'Recall','Precision','F1', 'Class wise IoU']
+    columns_to_int = ['log_num', 'tune_log_num']
+    df[columns_to_int] = df[columns_to_int].astype(int)
+
+    wanted_columns = ['log_num', 'which_label', 'weights', 'tune_log_num','distill_lamda', 'temperature', 'Mean IoU', 'Micro IoU', 'Macro IoU', 'Accuracy', 'Precision', 'Class wise IoU']
 
     df.to_csv('exp_metadata.csv', index=False)
-    df.to_csv('exp_data.csv', columns=wanted_columns)
+    df.to_csv('exp_data.csv', columns=wanted_columns, index=False)
 
     with open('empty_dfs.txt', 'w') as file:
         for df_name in empty_finetue_acc:

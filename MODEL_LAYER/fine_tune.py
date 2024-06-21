@@ -33,19 +33,18 @@ if __name__ == "__main__":
     root_path = ''
     root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
 
-    if is_vm:
-        config_path = os.path.join(root_path,'script/config.yml')
-    else:
-        config_path = os.path.join(root_path, 'script/config_k8s.yml')
     ####################################
     # PARSE CONFIG FILE
     ####################################
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
-    parser.add_argument('--config_path',type=str, default=config_path, help='Path to a configuration yaml file.' )
+    parser.add_argument('--config_path',type=str, default='script/config.yml', help='Path to a configuration yaml file.' )
     parser.add_argument('--if_predict',type=bool,default=True, help='True if make prediction using fine-tuned model.')
     args = parser.parse_args()
 
-    config_params = load_config(args.config_path)
+    config_path = args.config_path
+    config_path = os.path.join(root_path, config_path)
+    
+    config_params = load_config(config_path)
     
     sample_mode = config_params["sample"]["sample_mode"]
     which_label = config_params["data_loader"]["which_label"]
@@ -263,7 +262,7 @@ if __name__ == "__main__":
             
             # Compute mean IoU across all classes
             test_miou = sum(class_wise_iou_test) / len(class_wise_iou_test)
-
+            
             logger.info(f"Testing)")
             logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou, 3)}")
             logger.info(f"{'':<10}Class wise IoU{'':<1} ----> {class_wise_iou_test}")
@@ -273,7 +272,7 @@ if __name__ == "__main__":
             logger.info(f"{'':<10}Recall{'':<1} ----> {round(test_recall.item(), 3)}")
             logger.info(f"{'':<10}Precision{'':<1} ----> {round(test_precision.item(), 3)}")
             logger.info(f"{'':<10}F1{'':<1} ----> {round(test_f1.item(), 3)}")
-
+            
             # Accumulate stats
             total_tp += tp
             total_fp += fp
@@ -311,7 +310,7 @@ if __name__ == "__main__":
         test_miou_overall = sum(mIoUs)/len(mIoUs)
 
         # Calculate the mean class-wise IoU for all class-wise IoU per image
-        class_iou_overall = np.mean(np.array(class_IoUs), axis=0)
+        class_iou_overall = np.mean(np.array(class_IoUs), axis=0).tolist()
 
         # Compute metrics using total stats
         test_micro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
