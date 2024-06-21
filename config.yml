@@ -2,7 +2,7 @@ data_loader:
   name: MLFluvDataset
   test_paths: data/labelled_data/test_dataset
   train_paths: data/fold_data
-  which_label: ESRI
+  which_label: DW
 data_preprocess:
   convert_to_tif: true
   fluv_point_only: false
@@ -14,8 +14,8 @@ ee_service_account: earthi-ubuntu@sen12flood-qiuyangchen.iam.gserviceaccount.com
 incremental_learning:
   distill_lamda: 0
   freeze_encoder: false
-  temperature: 1
-  tune_log_num: 0
+  temperature: 10
+  tune_log_num: 5
   with_extra_urban: true
 model:
   encoder: resnet34
@@ -52,7 +52,7 @@ trainer:
   exp_folder: script/experiments
   in_channels: 15
   learning_rate: 0.0001
-  log_num: 1002
+  log_num: 2002
   mode: train
   train_fold:
   - 0

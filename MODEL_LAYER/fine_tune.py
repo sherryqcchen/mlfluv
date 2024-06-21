@@ -127,7 +127,7 @@ if __name__ == "__main__":
         df = pd.read_csv(weights_path)
         class_weights = df['Weights']
     else:
-        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix='hand')
+        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=f'{which_label}_finetune')
     print(class_weights)
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 
