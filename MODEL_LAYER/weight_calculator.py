@@ -110,22 +110,26 @@ if __name__ == "__main__":
     loss_func = config_params["model"]['loss_function']
     which_label = config_params['data_loader']['which_label']
 
-    fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'{sample_mode}_sampling_{which_label}_5_fold')
+    # fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'{sample_mode}_sampling_{which_label}_5_fold')
+    # fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_with_urban_{which_label}_5_fold')
+    fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'test_{which_label}_fold')
 
-    weights_path = f"{weight_func}_weights_{which_label}.csv"
+    # weights_path = f"{weight_func}_weights_{which_label}.csv"
+    weights_path = "{weight_func}_weights_testset_hand.csv"
+
 
     train_set = MLFluvDataset(
         data_path = fold_data_path,
         mode = 'test', # Use val here because we don't want any cropped data for calculating weights
-        folds = train_fold,
+        folds = [0],
         window = window_size,
-        label = which_label,
+        label = 'hand',# which_label,
         one_hot_encode = False)
 
     if os.path.isfile(weights_path):
         class_weights = list(csv.reader(open(weights_path, "r"), delimiter=","))
         class_weights = np.array([float(i) for i in class_weights[0]])
     else:
-        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=which_label)
+        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=f'{which_label}_incre')
     print(class_weights)
 
