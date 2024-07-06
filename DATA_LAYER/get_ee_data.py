@@ -229,7 +229,7 @@ def download_1_point_data(coords, river_order,
 
     col_filter = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(start_date, end_date))
 
-    col_filter_for_sentinel = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(ee.Date.fromYMD(year,9, 1), ee.Date.fromYMD(year,11, 1)))
+    col_filter_for_sentinel = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(ee.Date.fromYMD(year,8, 1), ee.Date.fromYMD(year,9, 1)))
 
     # Filter image collection from Google Dynamic World dataset, sentinel-1, sentinel-2
     dw_col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(col_filter_for_sentinel)
@@ -437,7 +437,7 @@ if __name__ == "__main__":
 
     YEAR = config['sample']['year']
 
-    SAMPLE_MODE = config['sample']['sample_mode']
+    SAMPLE_MODE = 'bare'#config['sample']['sample_mode']
     SAMPLE_LENGTH = config['sample']['sample_length']
 
     try:
@@ -451,7 +451,6 @@ if __name__ == "__main__":
 
     # points_path = Path(f'data/Amazon_HydroSHEDS_river_networks/network_points_{SAMPLE_LENGTH}_{SAMPLE_MODE}.csv')
     points_path = Path(f'data/Amazon_HydroSHEDS_river_networks/network_points_{SAMPLE_MODE}.csv')
-
     
     point_list = []
 

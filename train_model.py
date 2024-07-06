@@ -14,7 +14,7 @@ else:
 
 # Split data into 5 folds for train, validation 
 # When change labels among ESRI, DW, ESAWC, only re-run this step
-# subprocess.run(['python', os.path.join(script_path,'DATA_LAYER/split_data.py'), '--config_path', config_path])
+subprocess.run(['python', os.path.join(script_path,'DATA_LAYER/split_data.py'), '--config_path', config_path])
 
 # Train initial UNet model with a given label from existing LULC maps
 # subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/train.py', '--config_path'), config_path])
@@ -45,4 +45,4 @@ for params in grid:
     with open(config_path, 'w') as f:
         yaml.safe_dump(config, f)
     
-    subprocess.run(['python', os.path.join(script_path, 'MODEL_LAYER/fine_tune.py'), '--config_path', config_path])
+    subprocess.run(['python', os.path.join(script_path, 'MODEL_LAYER/incremental.py'), '--config_path', config_path])

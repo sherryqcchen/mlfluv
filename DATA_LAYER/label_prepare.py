@@ -158,7 +158,7 @@ if __name__=='__main__':
     MOVE_DATA = config['data_preprocess']['move_data']
 
     WHICH_LABEL = config['data_loader']['which_label']
-    SAMPLE_MODE = config['sample']['sample_mode']
+    SAMPLE_MODE = 'bare' #config['sample']['sample_mode']
 
     raw_data_path = os.path.join(root_path,f'data/full_data/')
     
@@ -257,7 +257,8 @@ if __name__=='__main__':
         f.writelines(fluvial_point_paths)
 
     # The path for storing the data after preprocess
-    dest_path = os.path.join(os.path.join(root_path,'data/clean_data'), f'mlfluv_s12lulc_data_clean_{SAMPLE_MODE}')
+    # dest_path = os.path.join(os.path.join(root_path,'data/clean_data'), f'mlfluv_s12lulc_data_clean_{SAMPLE_MODE}')
+    dest_path = os.path.join(os.path.join(root_path,'data/clean_data'), f'mlfluv_incremental_data_{SAMPLE_MODE}')
     
 
     with open(filename, 'r') as f:
