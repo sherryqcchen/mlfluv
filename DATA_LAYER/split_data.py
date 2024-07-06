@@ -127,13 +127,21 @@ def get_s12label_list(WHICH_LABEL, data_path):
 
     return label_list
 
+def filter_paths_by_folder_names(paths, folder_names):
+    """Filter paths to only include those that contain any of the folder names."""
+    filtered_paths = []
+    for path in paths:
+        if not any(folder_name in path for folder_name in folder_names):
+            filtered_paths.append(path)
+    return filtered_paths
+
 if __name__ == '__main__':
 
     root_path = ''
     root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
 
     if is_vm:
-        config_path = os.path.join(root_path,'script/config.yml')
+        config_path = os.path.join(root_path,'script/config_1003.yml')
     else:
         config_path = os.path.join(root_path, 'script/config_k8s.yml')
 
@@ -155,9 +163,9 @@ if __name__ == '__main__':
     train_data_path = os.path.join(root_path, 
                                    f'data/clean_data/mlfluv_s12lulc_data_water_from_{sample_mode}_{sample_length}')
     print("Processing train data.")
-    train_label_list = get_s12label_list(WHICH_LABEL, train_data_path)
-    split_n_folds(5, train_label_list, save_dir = os.path.join(root_path, 
-                                                               f'data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL))
+    # train_label_list = get_s12label_list(WHICH_LABEL, train_data_path)
+    # split_n_folds(5, train_label_list, save_dir = os.path.join(root_path, 
+    #                                                            f'data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL))
 
     if not args.split_train_only:
         # Getting the folder list for sediment and bare class seperation
@@ -171,15 +179,28 @@ if __name__ == '__main__':
         if with_extra_urban:
             incremental_label_list = sediment_label_list + bare_label_list + urban_label_list
             print('Spliting incremental data: sediment, bareland and urban.')
-            split_n_folds(5, incremental_label_list, save_dir=os.path.join(root_path, f'data/fold_data/finetune_with_urban_{WHICH_LABEL}_5_fold'), which_label=WHICH_LABEL)
+            split_n_folds(5, incremental_label_list, save_dir=os.path.join(root_path, f'data/fold_data/finetune_with_urban_bare_{WHICH_LABEL}_5_fold'), which_label=WHICH_LABEL)
         else:
-            incremental_label_list = sediment_label_list + bare_label_list
+            # incremental_label_list = sediment_label_list + bare_label_list
             print('Spliting incremental data: sediment and bareland.')
-            split_n_folds(5, incremental_label_list, save_dir=os.path.join(root_path, f'data/fold_data/finetune_{WHICH_LABEL}_5_fold'), which_label=WHICH_LABEL)
+            # split_n_folds(5, incremental_label_list, save_dir=os.path.join(root_path, f'data/fold_data/finetune_{WHICH_LABEL}_5_fold'), which_label=WHICH_LABEL)
         
         print('Processing test data.')
         test_label_list = get_s12label_list('hand', test_data_path)
 
-        # Random shuffle train data and split them into 5 folds
-        print('Spliting test data.')
-        split_n_folds(1, test_label_list, save_dir=os.path.join(root_path, f'data/fold_data/test_{WHICH_LABEL}_fold'), which_label=WHICH_LABEL)
+        # Get a full list of hand labelled images as test data
+        print('Getting one fold of full test data.')
+        # split_n_folds(1, test_label_list, save_dir=os.path.join(root_path, f'data/fold_data/test_{WHICH_LABEL}_fold'), which_label=WHICH_LABEL)
+
+        # Split hand labelled images into 5 folds
+        print('Getting 5 folds of test data.')
+        final_test_folders = os.listdir('/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/final_test_data')
+        final_test_list = [os.path.join(test_data_path, file) for file in final_test_folders]
+        split_n_folds(1, final_test_list, save_dir=os.path.join(root_path, f'data/fold_data/final_test_{WHICH_LABEL}_fold'), which_label=WHICH_LABEL)
+
+
+        calibrate_label_list = filter_paths_by_folder_names(test_label_list, final_test_folders)
+        print(len(calibrate_label_list))
+        split_n_folds(4, calibrate_label_list, save_dir=os.path.join(root_path, f'data/fold_data/final_test_{WHICH_LABEL}_4_fold'), which_label=WHICH_LABEL)
+
+

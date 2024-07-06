@@ -93,7 +93,7 @@ if __name__ == "__main__":
     print(f"{old_net.temperature=}")
 
     if with_extra_urban:
-        fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_with_urban_{which_label}_5_fold')
+        fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_with_urban_bare_{which_label}_5_fold')
     else:
         fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_{which_label}_5_fold')
     train_set = MLFluvDataset(
@@ -281,30 +281,6 @@ if __name__ == "__main__":
 
             mIoUs.append(test_miou)
             class_IoUs.append(class_wise_iou_test)
-
-        # # Compute class-wise IoU using total stats per class for the whole test dataset
-        # class_wise_iou_test = []
-        # for class_idx in range(classes):
-        #     class_iou = smp.metrics.iou_score(
-        #         total_tp_per_class[class_idx], 
-        #         total_fp_per_class[class_idx], 
-        #         total_fn_per_class[class_idx], 
-        #         total_tn_per_class[class_idx], 
-        #         reduction="none")
-            
-        #     class_wise_iou_test.append(class_iou.tolist())
-        
-        # # Sum the IoU for each class across all images
-        # for iou_list in class_wise_iou_test:
-        #     for class_idx in range(classes):
-        #         sum_iou_per_class[class_idx] += iou_list[class_idx]
-
-        # Compute mean IoU across all classes
-        # The following mIoU calculates sum (intersection of all images) / sum (union of all images)
-        # This mIoU is higher and more biased to the majority class
-        # test_miou_overall = sum(sum_iou_per_class) / (len(class_wise_iou_test) * classes)
-        
-        # class_wise_iou_overall = [i/classes for i in sum_iou_per_class]
 
         # We use mIoU calculated by mean (sum (mIoU of each image)), which is more sensitive to the accuracy of minority classes
         test_miou_overall = sum(mIoUs)/len(mIoUs)

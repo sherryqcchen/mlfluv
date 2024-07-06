@@ -68,6 +68,7 @@ class MLFluvUnetInterface():
         mode='initial_train',
         distill_lamda=0,
         old_model=None,
+        best_model_path = None
     ):
         self.device = device
         self.model = model.to(device)
@@ -76,6 +77,11 @@ class MLFluvUnetInterface():
 
         if self.mode == "initial_train":
             self.best_model_path = os.path.join(root_path, f'script/experiments/{self.log_num}/checkpoints/best_model.pth')
+        elif self.mode == "final_tune":
+            if best_model_path == None:
+                raise ValueError("Error: Please provide a valid path for best_model_path.")
+            else:
+                self.best_model_path = best_model_path
         else:
             self.best_model_path = os.path.join(root_path, f'script/experiments/{self.log_num}/{self.mode}/checkpoints/best_model.pth')
 
@@ -92,7 +98,7 @@ class MLFluvUnetInterface():
 
         self.criterion = loss_fn
         self.optimiser = optimiser
-        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimiser, mode='min', factor=0.1, patience=10)
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimiser, mode='min', factor=0.1, patience=2)
 
         self.batch_size = batch_size
         self.num_classes = self.model.num_classes
@@ -289,9 +295,10 @@ class MLFluvUnetInterface():
             self.best_val_miou = val_miou
             self.best_val_epoch = epoch_idx
             torch.save(self.model.model.state_dict(), self.best_model_path)
-            logger.info(f'\n\nSaved new model at epoch {epoch_idx}!\n\n')
+            logger.info(f'\n\nSaved new model at epoch {epoch_idx} at {self.best_model_path}!\n\n')
 
         logger.info(f"EPOCH: {epoch_idx} (validating)")
+        logger.info(f"Learning rate: {self.scheduler._last_lr}")
         logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(self.data_val):.3f}")
         logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(val_miou, 3)}")
         logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_val}")
