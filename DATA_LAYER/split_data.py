@@ -174,7 +174,7 @@ if __name__ == '__main__':
         print('Processing bare data.')
         bare_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/clean_data/mlfluv_incremental_data_bare'))
         print('Processing urban data.')
-        urban_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/clean_data/mlfluv_s12lulc_data_clean_urban'))
+        urban_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/clean_data/mlfluv_incremental_data_urban'))
         # Concatenate lists into one list for incremental learning (fine tuning)
         if with_extra_urban:
             incremental_label_list = sediment_label_list + bare_label_list + urban_label_list

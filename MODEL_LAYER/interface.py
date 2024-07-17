@@ -98,7 +98,7 @@ class MLFluvUnetInterface():
 
         self.criterion = loss_fn
         self.optimiser = optimiser
-        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimiser, mode='min', factor=0.1, patience=2)
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimiser, mode='min', factor=0.4, patience=2)
 
         self.batch_size = batch_size
         self.num_classes = self.model.num_classes
