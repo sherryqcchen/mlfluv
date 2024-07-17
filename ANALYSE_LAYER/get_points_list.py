@@ -28,9 +28,11 @@ def read_and_rename_columns(csv_file):
 def get_one_LULC_data_list(lulc='bare'):
     if lulc=='init_dataset':
         clean_data_path = 'data/clean_data/mlfluv_s12lulc_data_water_from_STRATIFIED_6000'
+    elif lulc=='test':
+        clean_data_path = 'data/labelled_data/test_dataset'
     else:
         clean_data_path = f'data/clean_data/mlfluv_incremental_data_{lulc}'
-    bare_folder_paths = [os.path.join(clean_data_path, file) for file in os.listdir(clean_data_path)]
+    bare_folder_paths = [os.path.join(clean_data_path, file) for file in os.listdir(clean_data_path) if os.path.isdir(os.path.join(clean_data_path, file))]
     print(f"{lulc} data amount: {len(bare_folder_paths)}")
 
     # print(bare_folder_paths)
@@ -55,4 +57,5 @@ def get_one_LULC_data_list(lulc='bare'):
 get_one_LULC_data_list('bare')
 get_one_LULC_data_list('sediment')
 get_one_LULC_data_list('urban')
+get_one_LULC_data_list('test')
 get_one_LULC_data_list('init_dataset')
