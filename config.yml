@@ -13,9 +13,9 @@ ee_api_key: script/sen12flood-qiuyangchen-8fdb42008616.json
 ee_service_account: earthi-ubuntu@sen12flood-qiuyangchen.iam.gserviceaccount.com
 incremental_learning:
   distill_lamda: 0
-  freeze_encoder: false
+  freeze_encoder: true
   temperature: 1
-  tune_log_num: 0
+  tune_log_num: 1
   with_extra_urban: true
 model:
   encoder: resnet34

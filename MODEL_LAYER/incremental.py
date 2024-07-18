@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     SHOW_PLOTS = False
 
-    weights_path = os.path.join(root_path, f"script/MODEL_LAYER/{weight_func}_weights_{which_label}_fintune.csv")
+    weights_path = os.path.join(root_path, f"script/MODEL_LAYER/{weight_func}_weights_{which_label}_incre.csv")
 
     print(f'Fine tune {tune_mode} for log {log_num}')
     print(f"{temperature = }")
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     logger.add(os.path.join(output_folder, 'info.log'))
 
     os.makedirs(os.path.join(output_folder, 'checkpoints'), exist_ok=True)
-    shutil.copy(os.path.join(root_path, f'script/MODEL_LAYER/fine_tune.py'), os.path.join(output_folder, 'fine_tune.py'))
+    shutil.copy(os.path.join(root_path, f'script/MODEL_LAYER/incremental.py'), os.path.join(output_folder, 'incremental.py'))
     shutil.copy(config_path, os.path.join(output_folder, 'config.yml'))
 
     # create an untrained model, with one extra class in num_classes
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         df = pd.read_csv(weights_path)
         class_weights = df['Weights']
     else:
-        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=f'{which_label}_finetune')
+        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=f'{which_label}_incre')
     print(class_weights)
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 

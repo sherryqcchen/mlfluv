@@ -20,8 +20,7 @@ class SMPUnet(torch.nn.Module):
             decoder_attention_type='scse',
             in_channels=in_channels,
             classes=num_classes,
-            activation=None,
-            encoder_freeze=False
+            activation=None
         )
 
         self.num_valid_classes = num_valid_classes

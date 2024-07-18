@@ -167,6 +167,7 @@ class MLFluvUnetInterface():
                 mask = torch.broadcast_to(mask.unsqueeze(1), (mask.shape[0], self.num_classes, mask.shape[1], mask.shape[2]))
                 
                 y_old[torch.logical_not(mask)] = -1e20 # -torch.inf triggers exponentiation operation overflows, so we use -1e20 instead
+                y_old = y_old / self.model.temperature 
                 probabilities_old = nn.functional.softmax(y_old, dim=1) # <--- old probablitliy
 
                 y_new = self.old_model.apply_mask(y_pred, self.old_model.num_valid_classes)

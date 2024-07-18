@@ -240,7 +240,7 @@ class MLFluvDataset(Dataset):
 
 if __name__ == '__main__':
 
-    my_dataset = MLFluvDataset(data_path="/exports/csce/datastore/geos/groups/LSDTopoData/MLFluv/mlfluv_5_folds_auto", 
+    my_dataset = MLFluvDataset(data_path='', 
                                folds=[0], 
                                mode='train',
                                label='ESRI')
