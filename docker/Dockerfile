@@ -11,11 +11,6 @@ ADD . /mlfluv
 ENV CONDA_AUTO_UPDATE_CONDA="false"
 RUN conda create -n mlfluvnn --file pytorch_env.txt python=3.10.4 && conda clean --all --yes
 
-# Activate the environment and install pyyaml
-RUN /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && \
-    conda activate mlfluvnn && conda install pyyaml && \
-    conda clean --all --yes"
-
 # Install necessary libraries for lxml
 RUN apt-get update && apt-get install -y --no-install-recommends libxml2-dev libxslt-dev && rm -rf /var/lib/apt/lists/*
 
