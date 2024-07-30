@@ -182,5 +182,3 @@ https://conda.anaconda.org/pytorch/linux-64/torchaudio-0.13.1-py310_cu117.tar.bz
 https://conda.anaconda.org/pytorch/linux-64/torchvision-0.14.1-py310_cu117.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-64/pandas-2.2.1-py310h6a678d5_0.conda
 https://conda.anaconda.org/conda-forge/noarch/xarray-2023.5.0-pyhd8ed1ab_0.conda
-pyyaml
-scikit-learn

@@ -14,6 +14,9 @@ RUN conda create -n mlfluvnn --file pytorch_env.txt python=3.10.4 && conda clean
 # Install necessary libraries for lxml
 RUN apt-get update && apt-get install -y --no-install-recommends libxml2-dev libxslt-dev && rm -rf /var/lib/apt/lists/*
 
+# Install pip packages
+RUN /opt/conda/envs/mlfluvnn/bin/pip install -r pytorch_env_pip.txt
+
 # Make port 80 available to the world outside this container
 EXPOSE 80
 
