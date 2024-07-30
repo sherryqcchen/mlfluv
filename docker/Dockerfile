@@ -14,7 +14,7 @@ RUN conda create -n mlfluvnn --file pytorch_env.txt python=3.10.4 && conda clean
 # Activate the environment and install pyyaml
 RUN /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && \
     conda activate mlfluvnn && \
-    conda-forge install pyyaml && \
+    conda install pyyaml && \
     conda clean --all --yes"
 
 # Install necessary libraries for lxml
