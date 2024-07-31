@@ -49,7 +49,7 @@ trainer:
   classes: 6
   device: cuda
   epochs: 50
-  exp_folder: script/experiments
+  exp_folder: /mnt/ceph_rbd/script/experiments
   in_channels: 15
   learning_rate: 0.0001
   log_num: 1004
