@@ -7,6 +7,7 @@ from UTILS import utils
 
 script_path = 'script/'
 script_path, is_vm = utils.update_root_path_for_machine(root_path=script_path)
+print(script_path)
 
 if is_vm:
     config_path = os.path.join(script_path,'config.yml')
