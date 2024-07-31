@@ -2,10 +2,10 @@
 FROM continuumio/miniconda3
 
 # Set the working directory in the container to /mlfluv
-WORKDIR /mlfluv
+WORKDIR /mnt/ceph_rbd
 
 # Copy the current directory contents into the container at /mlfluv
-ADD . /mlfluv
+ADD . /mnt/ceph_rbd
 
 # Install any needed packages specified in requirements.txt
 ENV CONDA_AUTO_UPDATE_CONDA="false"
