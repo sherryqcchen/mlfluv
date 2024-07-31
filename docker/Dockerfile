@@ -2,10 +2,10 @@
 FROM continuumio/miniconda3
 
 # Set the working directory in the container to /mlfluv
-WORKDIR /mnt/ceph_rbd/script
+WORKDIR /mnt/ceph_rbd
 
 # Copy the current directory contents into the container at /mlfluv
-ADD . /mnt/ceph_rbd/script/docker
+ADD . /mlfluv
 
 # Install any needed packages specified in requirements.txt
 ENV CONDA_AUTO_UPDATE_CONDA="false"
@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libxml2-dev lib
 # Install pip packages
 RUN /opt/conda/envs/mlfluvnn/bin/pip install -r pytorch_env_pip.txt
 
-# Install libGL.so.1
+# Install 
 RUN apt-get update && apt-get install -y libgl1-mesa-glx
 
 # Make port 80 available to the world outside this container
