@@ -45,7 +45,7 @@ sample:
   sample_mode: STRATIFIED
   year: 2020
 trainer:
-  batch_size: 16
+  batch_size: 128
   classes: 6
   device: cuda
   epochs: 50
