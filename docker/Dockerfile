@@ -2,7 +2,7 @@
 FROM continuumio/miniconda3
 
 # Set the working directory in the container to /mlfluv
-WORKDIR /mnt/ceph_rbd
+WORKDIR /mlfluv
 
 # Copy the current directory contents into the container at /mlfluv
 ADD . /mlfluv

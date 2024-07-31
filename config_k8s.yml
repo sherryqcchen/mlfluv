@@ -20,7 +20,7 @@ incremental_learning:
 model:
   encoder: resnet34
   loss_function: CrossEntropyLoss
-  weights: inverse_countQ   
+  weights: inverse_count   
 plot_setting:
   plot_data: true
 sample:
