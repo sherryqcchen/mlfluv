@@ -17,6 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends libxml2-dev lib
 # Install pip packages
 RUN /opt/conda/envs/mlfluvnn/bin/pip install -r pytorch_env_pip.txt
 
+# Install libGL.so.1
+RUN apt-get update && apt-get install -y libgl1-mesa-glx
+
 # Make port 80 available to the world outside this container
 EXPOSE 80
 
