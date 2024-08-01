@@ -2,7 +2,7 @@ data_loader:
   name: MLFluvDataset
   test_paths: /mnt/ceph_rbd/data/labelled_data/test_dataset
   train_paths: /mnt/ceph_rbd/data/fold_data
-  which_label: ESRI
+  which_label: DW
 data_preprocess:
   convert_to_tif: false
   fluv_point_only: true
@@ -52,7 +52,7 @@ trainer:
   exp_folder: /mnt/ceph_rbd/script/experiments
   in_channels: 15
   learning_rate: 0.0001
-  log_num: 1004
+  log_num: 2004
   mode: train
   train_fold:
   - 0
