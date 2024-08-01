@@ -19,7 +19,7 @@ else:
 # subprocess.run(['python', os.path.join(script_path,'DATA_LAYER/split_data.py'), '--config_path', config_path])
 
 # Train initial UNet model with a given label from existing LULC maps
-subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/train.py', '--config_path'), config_path])
+subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/train.py'), '--config_path', config_path])
 exit()
 # Make predition on the trained model
 subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/inference.py'), '--config_path', config_path])
