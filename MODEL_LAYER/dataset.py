@@ -118,8 +118,11 @@ class MLFluvDataset(Dataset):
             # If folds are not specified, all data will be loaded
             self.data = np.concatenate([self.all_folds[idx] for idx in range(len(self.all_folds))], axis=0)
         else:
-            self.data = np.concatenate([self.all_folds[idx] for idx in folds], axis=0)
-
+            try:
+                self.data = np.concatenate([self.all_folds[idx] for idx in folds], axis=0)
+            except ValueError as e:
+                print('Something wrong in the fold data, go to check the folds using examine_folds.py script and Solve the problem.')
+                raise e                
         
         self.window = window
         self.mode = mode
