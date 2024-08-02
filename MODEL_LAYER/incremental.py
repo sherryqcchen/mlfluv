@@ -66,7 +66,7 @@ if __name__ == "__main__":
     freeze_encoder = config_params["incremental_learning"]['freeze_encoder']
     tune_mode = f'fine_tune_{config_params["incremental_learning"]["tune_log_num"]}'
     ENCODER = config_params['model']['encoder']
-    ENCODER_WEIGHTS = None
+    ENCODER_WEIGHTS = config_params['model']['encoder_weights']
     ACTIVATION = None
 
     exp_folder = os.path.join(root_path, f'script/experiments/{log_num}')

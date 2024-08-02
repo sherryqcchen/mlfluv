@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # MODEL PARAMS
 
     ENCODER = config_params['model']['encoder']
-    ENCODER_WEIGHTS = 'imagenet' #None
+    ENCODER_WEIGHTS = config_params['model']['encoder_weights'] #None
     # ACTIVATION = None  # could be None for logits (binary) or 'softmax2d' for multicalss segmentation
 
     device = torch.device(device if torch.cuda.is_available() else "cpu")

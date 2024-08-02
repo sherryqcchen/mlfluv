@@ -19,6 +19,7 @@ incremental_learning:
   with_extra_urban: true
 model:
   encoder: resnet34
+  encoder_weights: 'imagenet'
   loss_function: CrossEntropyLoss
   weights: inverse_count   
 plot_setting:
