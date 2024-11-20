@@ -14,7 +14,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torchmetrics import JaccardIndex
 
-from dataset import MLFluvDataset
+from MODEL_LAYER.dataset import MLFluvDataset
 from UTILS import utils
 from UTILS.utils import load_config, extract_patches, reconstruct_from_patches
 from UTILS.plotter import plot_inference_result

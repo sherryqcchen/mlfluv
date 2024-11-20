@@ -123,10 +123,11 @@ def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig
     # Add test to the figure to print meta data of this point
     point_coords = meta_info['point'][0]
     year = meta_info['year'][0]
-    river_order = meta_info['riv_order'][0]
-    da = meta_info['drainage_area'][0]
+    # river_order = meta_info['riv_order'][0]
+    # da = meta_info['drainage_area'][0]
 
-    meta_str = f"Images for {point_coords} in {year}.\n River order: {river_order}, upland drainage area: {da} km \u00B2."
+    meta_str = f"Images for {point_coords} in {year}."
+    #f"Images for {point_coords} in {year}.\n River order: {river_order}, upland drainage area: {da} km \u00B2."
 
     fig.text(0.10, 0.85, meta_str, fontsize=18)
 
