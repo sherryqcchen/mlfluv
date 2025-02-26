@@ -104,12 +104,14 @@ class MLFluvDataset(Dataset):
             mode = 'train',
             folds = [0, 1, 2, 3],
             label = None,
-            one_hot_encode = False          
+            one_hot_encode = False,
+            bands = ['VV','VH','B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B10','B11','B12']          
     ):
         """
         Pytorch Dataset class to load samples from the MLFLuv dataset for fluvial system semantic segmentation.
 
         """   
+        
         # print(os.listdir(data_path))
         self.file_paths = [os.path.join(data_path, file) for file in os.listdir(data_path)] # 5 npy files
         self.all_folds = [np.load(file, allow_pickle=True) for file in self.file_paths if file.endswith('.npy')] # len() is 5 because of 5 folds split
@@ -120,7 +122,10 @@ class MLFluvDataset(Dataset):
         else:
             self.data = np.concatenate([self.all_folds[idx] for idx in folds], axis=0)
 
-        
+        self.s1_bands = ['VV', 'VH']
+        self.s2_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
+        self.all_bands = self.s1_bands + self.s2_bands  # Full list of 15 bands
+        self.bands = bands
         self.window = window
         self.mode = mode
         self.norm = norm
@@ -129,6 +134,13 @@ class MLFluvDataset(Dataset):
 
         if self.one_hot_encode:
             self.label_values = [0, 1, 2, 3, 4, 5, 6]
+    
+    def get_band_indices(self):
+        """
+        Get the indices of selected bands from the full list of available bands.
+        """
+        band_indices = {band: i for i, band in enumerate(self.all_bands)}
+        return [band_indices[band] for band in self.bands if band in band_indices]
             
 
     def transform(self, image, mask, rough_mask=None):
@@ -206,7 +218,16 @@ class MLFluvDataset(Dataset):
 
         # Train on S1 2 bands and S2 13 bands
         # clip each image to 512*512 as height * width
-        image = np.dstack((s1_arr, s2_arr))[:512, :512, :]  # shape [h, w, band], band=15
+        
+        #TODO: add a module that can customize train input bands based on 
+
+        full_image = np.dstack((s1_arr, s2_arr))[:512, :512, :]  # shape [h, w, band], band=15
+        
+        # Get indices of selected bands
+        selected_indices = self.get_band_indices()
+
+        # Extract selected bands
+        image = full_image[:, :, selected_indices] 
         image = np.transpose(image, (2, 0, 1))  # shape [band, h, w], band=15
 
         # plot_pair(image, mask, "before_transform")
@@ -243,7 +264,8 @@ if __name__ == '__main__':
     my_dataset = MLFluvDataset(data_path='', 
                                folds=[0], 
                                mode='train',
-                               label='ESRI')
+                               label='ESRI',
+                               bands = ['B2', 'B3', 'B4', 'B8'])
     print(len(my_dataset.data[0]))
     # print(my_dataset.data[0])
 

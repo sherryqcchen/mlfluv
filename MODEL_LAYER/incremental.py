@@ -46,12 +46,18 @@ if __name__ == "__main__":
     
     config_params = load_config(config_path)
     
+    s1_bands = config_params.get("sample", {}).get("s1_bands", []) or []
+    s2_bands = config_params.get("sample", {}).get("s2_bands", []) or []
+
+    bands = s1_bands + s2_bands  # This will work even if one of them is missing
+    print(bands)
+    in_channels = len(bands) # config_params["trainer"]["in_channels"]
+    
     sample_mode = config_params["sample"]["sample_mode"]
     which_label = config_params["data_loader"]["which_label"]
     log_num = config_params["trainer"]["log_num"]
     train_fold = config_params["trainer"]["train_fold"]
     valid_fold = config_params["trainer"]["valid_fold"]
-    in_channels = config_params["trainer"]["in_channels"]
     classes = config_params["trainer"]["classes"] + 1 # 7
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
@@ -101,7 +107,8 @@ if __name__ == "__main__":
         mode='train',
         label=which_label,
         folds=train_fold,
-        one_hot_encode=False      
+        one_hot_encode=False,
+        bands=bands     
     )
 
     val_set = MLFluvDataset(
@@ -109,7 +116,8 @@ if __name__ == "__main__":
         mode='val',
         label=which_label,
         folds=valid_fold,
-        one_hot_encode=False      
+        one_hot_encode=False,
+        bands=bands      
     )
     
     # load pretrain model weights
@@ -183,7 +191,8 @@ if __name__ == "__main__":
             mode='test',
             label='hand',
             folds=None,
-            one_hot_encode=False      
+            one_hot_encode=False,
+            bands=bands      
         )
     
         test_loader = DataLoader(test_set, batch_size=1, shuffle=False)  # TODO: workers

@@ -33,20 +33,26 @@ if __name__ == "__main__":
     root_path = ''
     root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
 
-    final_tune_path = 'script/experiments/2003/fine_tune_15'
+    final_tune_path = 'script/experiments/2003/fine_tune_34'
     config_path = os.path.join(final_tune_path, 'config.yml')
     
     config_params = load_config(config_path)
+    
+    s1_bands = config_params.get("sample", {}).get("s1_bands", []) or []
+    s2_bands = config_params.get("sample", {}).get("s2_bands", []) or []
+
+    bands = s1_bands + s2_bands  # This will work even if one of them is missing
+    print(bands)
+    in_channels = len(bands) # config_params["trainer"]["in_channels"]
     
     sample_mode = config_params["sample"]["sample_mode"]
     which_label = config_params["data_loader"]["which_label"]
     log_num = config_params["trainer"]["log_num"]
     train_fold = config_params["trainer"]["train_fold"]
     valid_fold = config_params["trainer"]["valid_fold"]
-    in_channels = config_params["trainer"]["in_channels"]
     classes = config_params["trainer"]["classes"] + 1 # 7
     device = config_params["trainer"]["device"]
-    epochs = 100 # config_params["trainer"]["epochs"]
+    epochs = 50 # config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
     loss_func = config_params["model"]['loss_function']
     batch_size = config_params["trainer"]["batch_size"]
@@ -93,7 +99,8 @@ if __name__ == "__main__":
         mode='train',
         label='hand',
         folds=train_fold,
-        one_hot_encode=False      
+        one_hot_encode=False,
+        bands = bands      
     )
 
     val_set = MLFluvDataset(
@@ -101,7 +108,8 @@ if __name__ == "__main__":
         mode='val',
         label='hand',
         folds=[0],
-        one_hot_encode=False      
+        one_hot_encode=False,
+        bands = bands      
     )
 
     # Use saved weights for loss function, if the weights are pre-calculated 
@@ -116,7 +124,7 @@ if __name__ == "__main__":
     # SET LOSS, OPTIMIZER
     if loss_func == "CrossEntropyLoss":
         criterion = nn.CrossEntropyLoss(reduction='mean',
-                                        weight=weights,
+                                        # weight=weights,
                                         label_smoothing=0.01) 
                                         # ignore_index=0)
     elif loss_func == "FocalLoss":
@@ -161,11 +169,13 @@ if __name__ == "__main__":
     logger.add(os.path.join(output_folder,'preds.log'))
 
     test_set = MLFluvDataset(
-        data_path=os.path.join(config_params['data_loader']['train_paths'], f'final_test_{which_label}_fold'),
+        data_path= os.path.join(root_path, f'data/fold_data/test_{which_label}_fold'),
+        #os.path.join(config_params['data_loader']['train_paths'], f'final_test_{which_label}_fold'),
         mode='test',
         label='hand',
         folds=None,
-        one_hot_encode=False      
+        one_hot_encode=False,
+        bands = bands      
     )
 
     test_loader = DataLoader(test_set, batch_size=1, shuffle=False)  # TODO: workers
@@ -216,6 +226,7 @@ if __name__ == "__main__":
         s1_vv = image.cpu().numpy()[0,0,:,:]
         
         plot_inference_result(s2_rgb, s1_vv, y, y_pred_map, os.path.join(output_folder,'preds'), i)
+        
         
         tp, fp, fn, tn = smp.metrics.get_stats(y_pred_map, mask.cpu().squeeze().long(), mode='multiclass', num_classes=classes)
         # compute metric

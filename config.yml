@@ -25,8 +25,8 @@ plot_setting:
   plot_data: true
 sample:
   s1_bands:
-  - VV
-  - VH
+  # - VV
+  # - VH
   s2_bands:
   - B1
   - B2
@@ -43,16 +43,15 @@ sample:
   - B12
   sample_length: 6000
   sample_mode: STRATIFIED
-  year: 2020
+  year: 2021
 trainer:
   batch_size: 16
   classes: 6
   device: cuda
   epochs: 50
   exp_folder: script/experiments
-  in_channels: 15
   learning_rate: 0.0001
-  log_num: 2003
+  log_num: 200303
   mode: train
   train_fold:
   - 0

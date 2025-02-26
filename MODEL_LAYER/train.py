@@ -41,17 +41,23 @@ if __name__ == "__main__":
     config_params = utils.load_config(args.config_path)
 
     sample_mode = config_params["sample"]["sample_mode"]
+    s1_bands = config_params.get("sample", {}).get("s1_bands", []) or []
+    s2_bands = config_params.get("sample", {}).get("s2_bands", []) or []
+
+    bands = s1_bands + s2_bands  # This will work even if one of them is missing
+    print(bands)
+    in_channels = len(bands) # config_params["trainer"]["in_channels"]
+
     which_label = config_params["data_loader"]["which_label"]
 
     log_num = config_params["trainer"]["log_num"]
     train_fold = config_params["trainer"]["train_fold"]
     valid_fold = config_params["trainer"]["valid_fold"]
-    in_channels = config_params["trainer"]["in_channels"]
+    batch_size = config_params["trainer"]["batch_size"]
     num_classes = config_params["trainer"]["classes"]
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
-    batch_size = config_params["trainer"]["batch_size"]
     window_size = config_params["trainer"]["window_size"]
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
@@ -83,7 +89,7 @@ if __name__ == "__main__":
     device = torch.device(device if torch.cuda.is_available() else "cpu")
     print(f"Using {device} device")
 
-    model = SMPUnet(encoder_name=ENCODER, in_channels=15, num_classes=6)
+    model = SMPUnet(encoder_name=ENCODER, in_channels=in_channels, num_classes=6)
     # print(model)
 
     fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'{sample_mode}_sampling_{which_label}_5_fold')
@@ -94,7 +100,8 @@ if __name__ == "__main__":
         folds=train_fold,
         window=window_size,
         label=which_label,
-        one_hot_encode=False
+        one_hot_encode=False,
+        bands=bands
     )
 
     val_set = MLFluvDataset(
@@ -103,7 +110,8 @@ if __name__ == "__main__":
         folds=valid_fold,
         window=window_size, 
         label=which_label,
-        one_hot_encode=False
+        one_hot_encode=False,
+        bands=bands
     )
 
     # Use saved weights for loss function, if the weights are pre-calculated 

@@ -93,9 +93,16 @@ if __name__ == '__main__':
     SHOW_PLOTS = False
 
     config_params = load_config(os.path.join(exp_folder, 'config.yml'))
+    
+    s1_bands = config_params.get("sample", {}).get("s1_bands", []) or []
+    s2_bands = config_params.get("sample", {}).get("s2_bands", []) or []
+
+    bands = s1_bands + s2_bands  # This will work even if one of them is missing
+    print(bands)
+    in_channels = len(bands) # config_params["trainer"]["in_channels"]
 
     log_num = config_params["trainer"]["log_num"]
-    in_channels = config_params["trainer"]["in_channels"]
+    # in_channels = config_params["trainer"]["in_channels"]
     classes = config_params["trainer"]["classes"]
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
@@ -129,7 +136,8 @@ if __name__ == '__main__':
         mode='test',
         label=which_label,
         folds = None,
-        one_hot_encode=False      
+        one_hot_encode=False,
+        bands=bands      
     )
     # print(test_set.num_classes)
 
