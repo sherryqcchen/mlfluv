@@ -194,14 +194,15 @@ if __name__ == '__main__':
         plot_inference_result(s2_rgb, s1_vv, y, y_pred_map, output_folder, i)
         
         tp, fp, fn, tn = smp.metrics.get_stats(y_pred_map, mask.cpu().squeeze().long(), mode='multiclass', num_classes=classes)
-        # compute metric
-        test_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
-        test_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro")
-        test_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro")
-        test_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="micro")
-        test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
-        test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
 
+        # compute metric
+        test_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # averaging over all pixels
+        test_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro") # averaging over classes
+        test_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="macro")
+        test_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="macro")
+        test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="macro")
+        test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="macro")
+         
         # Accumulate stats per class
         for class_idx in range(classes):
             total_tp_per_class[class_idx] += tp[class_idx]

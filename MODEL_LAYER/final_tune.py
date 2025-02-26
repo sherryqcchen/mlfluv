@@ -87,7 +87,7 @@ if __name__ == "__main__":
     shutil.copy(config_path, os.path.join(output_folder, 'config.yml'))
 
     # create an untrained model, with one extra class in num_classes
-    model = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=7, encoder_freeze=freeze_encoder, temperature=temperature)
+    model = SMPUnet(encoder_name="resnet34", in_channels=in_channels, num_classes=classes, num_valid_classes=7, encoder_freeze=freeze_encoder, temperature=temperature)
     print(f"{model.temperature=}")
 
     checkpoint_path = os.path.join(final_tune_path, 'checkpoints', os.listdir(os.path.join(final_tune_path, 'checkpoints'))[0])

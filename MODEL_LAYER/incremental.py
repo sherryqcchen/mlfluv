@@ -95,7 +95,7 @@ if __name__ == "__main__":
     shutil.copy(config_path, os.path.join(output_folder, 'config.yml'))
 
     # create an untrained model, with one extra class in num_classes
-    old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
+    old_net = SMPUnet(encoder_name="resnet34", in_channels=in_channels, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
     print(f"{old_net.temperature=}")
 
     if with_extra_urban:
@@ -300,10 +300,10 @@ if __name__ == "__main__":
         # Compute metrics using total stats
         test_micro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
         test_macro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
-        test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+        test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+        test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+        test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="macro")
 
         logger.info(f"Overall Testing Result)")
         logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou_overall, 3)}")
