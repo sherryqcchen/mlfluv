@@ -2,6 +2,8 @@ import argparse
 import os
 import sys
 
+import rasterio
+
 # Add the parent directory to the system path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
@@ -14,17 +16,10 @@ import numpy.lib.recfunctions as rf
 import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy.interpolate import NearestNDInterpolator
-from gee_s1_ard.python_api import wrapper as wp
 from UTILS import plotter
 from UTILS import utils
 
-root_path = ''
-root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
 
-if is_vm:
-    config_path = os.path.join(root_path,'script/config.yml')
-else:
-    config_path = os.path.join(root_path, 'script/config_k8s.yml')
 
 
 def all_exist(full_list, given_list):
@@ -154,34 +149,60 @@ def remap_lulc(image, lulc_type='esa_world_cover'):
 
     return image_remap
 
-def convert_ee_image_to_np_arr(img, band_names, geometry):
+def convert_ee_image_to_np_arr(img, band_names, geometry, out_crs="EPSG:4326", scale=10):
     """
-    Resample and then convert ee images from ee.Image object to .npy file.
-    Default coordinate system: epsg:4326, spatial resolution: 10 meters.
+    Converts an Earth Engine Image to a NumPy array while allowing flexibility in output CRS.
 
     Args:
-        img(ee.Image object): Sentinel-1/2 image or land cover map, data type ee.Image.
-        band_names(string or list of strings): band names of the ee.Image objected.
-        geometry(ee.Geometry object): bounds of downloaded data.
- 
+        img (ee.Image): The Earth Engine Image.
+        band_names (str or list of str): Band name(s) to select from the image.
+        geometry (ee.Geometry): The region of interest to download.
+        out_crs (str): Desired output CRS (default: 'EPSG:4326').
+        scale (int or float): Resolution (in meters) for the export (default: 10).
+
     Returns:
-        img_arr: converted ee image, data type ndarray, shape (514, 514, band number)
+        (numpy.ndarray, dict):
+            A tuple of:
+              - 2D NumPy array for single band or 3D for multi-band,
+              - dictionary with { 'crs': <CRS str>, 'transform': [list_of_6_values] }.
     """
+    # Reproject the image to the desired CRS
+    # (If you have multiple bands, ensure band_names is a list, e.g., ["majorityWater"]).
+    img_resample = img.select(band_names).reproject(crs=out_crs, scale=scale)
 
-    img_resample = img.select(band_names).reproject(crs='EPSG:4326', scale=10)
-    img_projection = img_resample.select(0).projection()
-    img_url = img_resample.toFloat().getDownloadURL({'name': 's1_image',
-                                                   'bands': band_names,
-                                                   'region': geometry,
-                                                   'scale': 10,
-                                                   'format': 'NPY'})
-    img_response = requests.get(img_url)
-    img_data = np.load(io.BytesIO(img_response.content))
-    # reshape data: unpack numpy array of tuples into ndarray
-    # Method from: https://stackoverflow.com/questions/55852450/how-do-i-unpack-a-numpy-array-of-tuples-into-an-ndarray
-    img_arr = rf.structured_to_unstructured(img_data)
+    # Get download URL as a GeoTIFF (to preserve georeferencing)
+    img_url = img_resample.toFloat().getDownloadURL({
+        'name': 'IMAGE',
+        'bands': band_names,
+        'region': geometry,
+        'scale': scale,
+        'format': 'GEO_TIFF'
+    })
 
-    return img_arr, img_projection
+    # Download the GeoTIFF and read with rasterio
+    response = requests.get(img_url)
+    with rasterio.open(io.BytesIO(response.content)) as src:
+        # If multiple bands, read them all
+        # shape: (bands, height, width)
+        img_data = src.read()
+
+        # Convert to [height, width, bands] if multiple bands
+        if img_data.shape[0] == 1:
+            # Single band -> 2D array
+            img_arr = img_data[0]
+        else:
+            # Multiple bands -> reorder to (height, width, bands)
+            img_arr = np.transpose(img_data, (1, 2, 0))
+
+        # Extract CRS and transform
+        crs_str = src.crs.to_string()  # e.g. "EPSG:32644"
+        transform_vals = list(src.transform)  # 6 values for Affine transform
+
+    # Replace inf/-inf with NaN
+    img_arr[np.isinf(img_arr)] = np.nan
+
+    # Return array plus projection dict
+    return img_arr, {'crs': crs_str, 'transform': transform_vals}
 
 def interpolator(data):
     """
@@ -305,7 +326,8 @@ def download_1_point_data(coords, river_order,
                     'SAVE_ASSET': False,
                     'ASSET_ID': "users/qiuyangschen"
                     }
-        # pre-process s1 collection
+    # pre-process s1 collection
+    from gee_s1_ard.python_api import wrapper as wp
     s1_processed = wp.s1_preproc(parameter)
     if s1_processed.size().getInfo() != 0:
         s1_id = s1_processed.first().get('system:index')
@@ -424,7 +446,15 @@ def download_1_point_data(coords, river_order,
 
 
         
-if __name__ == "__main__":
+if __name__ == "__main__": 
+    
+    root_path = ''
+    root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+
+    if is_vm:
+        config_path = os.path.join(root_path,'script/config.yml')
+    else:
+        config_path = os.path.join(root_path, 'script/config_k8s.yml')
 
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for downloading data from Earth Engine API. Remember to apply for a EE authentication key as well.")
     parser.add_argument('--config_path',type=str, default=config_path,help='Path to a configuration yaml file.' )

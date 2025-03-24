@@ -25,7 +25,7 @@ import asyncio
 import planet
 from planet import Auth, Session, DataClient, OrdersClient, order_request, reporting
 
-from label_prepare import get_bounding_box
+from mlfluv.DATA_LAYER.label_prepare import get_bounding_box
 from rasterio.transform import from_origin
 
 
@@ -114,7 +114,7 @@ async def cancel_order(order_id):
         await client.cancel_order(order_id=order_id)
 
 
-def search_planet_data(job_name, geometry, date_start, date_end):
+def search_planet_data(job_name, geometry, date_start, date_end, cloud_perc=0.05, sun_elevation=30):
     """
     Search available planet data using Data API by given polygon geometry, start date and end date.
 
@@ -132,10 +132,23 @@ def search_planet_data(job_name, geometry, date_start, date_end):
                         {"gte": date_start.isoformat()+'T00:00:00.000Z',
                         "lt": date_end.isoformat()+'T00:00:00.000Z'}}
     cloud_cover_filter = {"type": "RangeFilter", "field_name": "cloud_cover", "config": 
-                        {"lte": 0.05}} # Cloud cover <= 5%
+                        {"lte": cloud_perc}} # Cloud cover <= 5%
+    sun_angle_filter = {"type": "RangeFilter", "field_name": "sun_elevation", "config": 
+                        {"gte": sun_elevation}}
+    
+    asset_filter = {"type": "AndFilter", "config": [
+        {"type": "AssetFilter", "config": ["basic_analytic_4b"]},
+        {"type": "AssetFilter", "config": ["basic_analytic_8b"]}
+    ]}
+    
+    other_filter = {"type": "AndFilter", "config": [
+        {"type":"StringInFilter","field_name":"instrument","config":["PSB.SD"]},
+        {"type":"StringInFilter","field_name":"publishing_stage","config":["standard","finalized"]},
+        {"type":"PermissionFilter","config":["assets:download"]}
+    ]}
     
     # combine our geo, date, cloud filters
-    combined_filter = {"type": "AndFilter", "config": [geometry_filter, date_range_filter, cloud_cover_filter]}
+    combined_filter = {"type": "AndFilter", "config": [geometry_filter, date_range_filter, cloud_cover_filter, sun_angle_filter, asset_filter, other_filter]}
 
     # searching items and assest
     item_type = ["PSScene"]
