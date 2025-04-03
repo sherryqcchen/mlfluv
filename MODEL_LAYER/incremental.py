@@ -248,10 +248,10 @@ if __name__ == "__main__":
             # compute metric
             test_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
             test_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro")
-            test_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro")
-            test_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="micro")
-            test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
-            test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
+            test_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="macro")
+            test_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="macro")
+            test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="macro")
+            test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="macro")
 
             # Accumulate stats per class
             for class_idx in range(classes):

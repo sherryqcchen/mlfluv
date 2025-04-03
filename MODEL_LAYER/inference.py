@@ -247,10 +247,10 @@ if __name__ == '__main__':
     # Compute metrics using total stats
     test_micro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
     test_macro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
-    test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-    test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-    test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-    test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+    test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+    test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+    test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+    test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="macro")
 
     logger.info(f"Overall Testing Result)")
     logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou_overall, 3)}")
