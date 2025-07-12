@@ -46,7 +46,6 @@ def items_to_scenes(items):
             'id': item['id'],
             'acquired': item['properties']['acquired'],
             'cloud_cover': item['properties']['cloud_cover'],
-            'cloud_percent': item['properties']['cloud_percent'],
             'footprint': item['geometry']
         })
         return props  
@@ -75,7 +74,7 @@ def display_thumbnails(scenes, limit=5):
 async def search_Planet(name, filter, item):
     async with Session() as sess:
         cl = DataClient(sess)
-        results = cl.search(name=name, search_filter=filter, item_types=item)
+        results = cl.search(name=name, search_filter=filter, item_types=item, limit=2000)
         list = [i async for i in results]
         return list     
     
@@ -129,22 +128,22 @@ def search_planet_data(job_name, geometry, date_start, date_end, cloud_perc=0.05
     # Create filters for Data API search
     geometry_filter = {"type": "GeometryFilter", "field_name": "geometry", "config": geometry}
     date_range_filter = {"type": "DateRangeFilter", "field_name": "acquired", "config": 
-                        {"gte": date_start.isoformat()+'T00:00:00.000Z',
-                        "lt": date_end.isoformat()+'T00:00:00.000Z'}}
+                        {"gte":f"{date_start}T00:00:00.000Z",
+                        "lt": f"{date_end}T00:00:00.000Z"}}
     cloud_cover_filter = {"type": "RangeFilter", "field_name": "cloud_cover", "config": 
                         {"lte": cloud_perc}} # Cloud cover <= 5%
     sun_angle_filter = {"type": "RangeFilter", "field_name": "sun_elevation", "config": 
                         {"gte": sun_elevation}}
     
-    asset_filter = {"type": "AndFilter", "config": [
-        {"type": "AssetFilter", "config": ["basic_analytic_4b"]},
-        {"type": "AssetFilter", "config": ["basic_analytic_8b"]}
+    asset_filter = {"type": "OrFilter", "config": [
+        {"type": "AssetFilter", "config": ["ortho_analytic_4b"]},
+        {"type": "AssetFilter", "config": ["ortho_analytic_8b"]}
     ]}
     
     other_filter = {"type": "AndFilter", "config": [
-        {"type":"StringInFilter","field_name":"instrument","config":["PSB.SD"]},
+        # {"type":"StringInFilter","field_name":"instrument","config":["PSB.SD", ]},
         {"type":"StringInFilter","field_name":"publishing_stage","config":["standard","finalized"]},
-        {"type":"PermissionFilter","config":["assets:download"]}
+        # {"type":"PermissionFilter","config":["assets:download"]}
     ]}
     
     # combine our geo, date, cloud filters
