@@ -46,12 +46,18 @@ if __name__ == "__main__":
     
     config_params = load_config(config_path)
     
+    s1_bands = config_params.get("sample", {}).get("s1_bands", []) or []
+    s2_bands = config_params.get("sample", {}).get("s2_bands", []) or []
+
+    bands = s1_bands + s2_bands  # This will work even if one of them is missing
+    print(bands)
+    in_channels = len(bands) # config_params["trainer"]["in_channels"]
+    
     sample_mode = config_params["sample"]["sample_mode"]
     which_label = config_params["data_loader"]["which_label"]
     log_num = config_params["trainer"]["log_num"]
     train_fold = config_params["trainer"]["train_fold"]
     valid_fold = config_params["trainer"]["valid_fold"]
-    in_channels = config_params["trainer"]["in_channels"]
     classes = config_params["trainer"]["classes"] + 1 # 7
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
@@ -60,6 +66,7 @@ if __name__ == "__main__":
     batch_size = config_params["trainer"]["batch_size"]
     weight_func = config_params["model"]["weights"]
     window_size = config_params["trainer"]["window_size"]
+    patch_size = config_params["sample"]["patch_size"]
     with_extra_urban = config_params["incremental_learning"]['with_extra_urban']
     temperature = config_params["incremental_learning"]['temperature']
     distill_lamda = config_params["incremental_learning"]['distill_lamda']
@@ -89,7 +96,7 @@ if __name__ == "__main__":
     shutil.copy(config_path, os.path.join(output_folder, 'config.yml'))
 
     # create an untrained model, with one extra class in num_classes
-    old_net = SMPUnet(encoder_name="resnet34", in_channels=15, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
+    old_net = SMPUnet(encoder_name="resnet34", in_channels=in_channels, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
     print(f"{old_net.temperature=}")
 
     if with_extra_urban:
@@ -99,17 +106,23 @@ if __name__ == "__main__":
     train_set = MLFluvDataset(
         data_path=fold_data_path,
         mode='train',
+        window_size=window_size,
+        patch_size=patch_size,
         label=which_label,
         folds=train_fold,
-        one_hot_encode=False      
+        one_hot_encode=False,
+        bands=bands     
     )
 
     val_set = MLFluvDataset(
         data_path=fold_data_path,
         mode='val',
+        window_size=window_size,
+        patch_size=patch_size,
         label=which_label,
         folds=valid_fold,
-        one_hot_encode=False      
+        one_hot_encode=False,
+        bands=bands      
     )
     
     # load pretrain model weights
@@ -182,8 +195,11 @@ if __name__ == "__main__":
             data_path=os.path.join(root_path, f'data/fold_data/test_{which_label}_fold'),
             mode='test',
             label='hand',
+            window_size=window_size,
+            patch_size=patch_size,
             folds=None,
-            one_hot_encode=False      
+            one_hot_encode=False,
+            bands=bands      
         )
     
         test_loader = DataLoader(test_set, batch_size=1, shuffle=False)  # TODO: workers
@@ -194,9 +210,6 @@ if __name__ == "__main__":
         # model.load_state_dict(torch.load(checkpoint_path, map_location=device)['model'])
         new_net.load_state_dict(torch.load(checkpoint_path, map_location=device))
         new_net.eval()
-
-        # calculate IoU
-        test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
 
         # Initialize accumulators for accuracy metrics
         total_tp, total_fp, total_fn, total_tn = 0, 0, 0, 0
@@ -213,7 +226,7 @@ if __name__ == "__main__":
         for i, (image, mask) in enumerate(test_loader):
             image, mask = image.to(device), mask.to(device)
             
-            if int(window_size) == 512:
+            if int(window_size) == patch_size:
                 y_pred = new_net(image).cpu().detach().numpy().squeeze()
             else:
                 # Inference with patches, because the data tile size is not the same as window size
@@ -239,10 +252,10 @@ if __name__ == "__main__":
             # compute metric
             test_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
             test_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro")
-            test_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro")
-            test_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="micro")
-            test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
-            test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
+            test_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="macro")
+            test_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="macro")
+            test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="macro")
+            test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="macro")
 
             # Accumulate stats per class
             for class_idx in range(classes):
@@ -250,6 +263,9 @@ if __name__ == "__main__":
                 total_fp_per_class[class_idx] += fp[class_idx]
                 total_fn_per_class[class_idx] += fn[class_idx]
                 total_tn_per_class[class_idx] += tn[class_idx]
+            
+            # calculate IoU
+            test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
 
             test_jaccard_index.update(y_pred_map, mask.cpu().squeeze().long())
             test_ious = test_jaccard_index.compute()
@@ -291,10 +307,10 @@ if __name__ == "__main__":
         # Compute metrics using total stats
         test_micro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
         test_macro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
-        test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-        test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+        test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+        test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+        test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+        test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="macro")
 
         logger.info(f"Overall Testing Result)")
         logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou_overall, 3)}")

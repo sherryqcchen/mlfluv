@@ -111,14 +111,14 @@ def get_s12label_list(WHICH_LABEL, data_path):
 
             # Masking where NaNs in Sentinel data as 0 in the label
             if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
-                continue
-                # mask_s1 = np.isnan(s1_arr)
-                # mask_s2 = np.isnan(s2_arr)
-                # mask_s1_aggregated = np.any(mask_s1, axis=-1)
-                # mask_s2_aggregated = np.any(mask_s2, axis=-1)
-                # union_mask = np.logical_or(mask_s1_aggregated, mask_s2_aggregated)
+                # continue
+                mask_s1 = np.isnan(s1_arr)
+                mask_s2 = np.isnan(s2_arr)
+                mask_s1_aggregated = np.any(mask_s1, axis=-1)
+                mask_s2_aggregated = np.any(mask_s2, axis=-1)
+                union_mask = np.logical_or(mask_s1_aggregated, mask_s2_aggregated)
 
-                # label_arr[union_mask] = 0
+                label_arr[union_mask] = 0
 
             np.save(label_path, label_arr)
             # print('After removing NaNs:', np.unique(label_arr))

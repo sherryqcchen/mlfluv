@@ -14,7 +14,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torchmetrics import JaccardIndex
 
-from dataset import MLFluvDataset
+from MODEL_LAYER.dataset import MLFluvDataset
 from UTILS import utils
 from UTILS.utils import load_config, extract_patches, reconstruct_from_patches
 from UTILS.plotter import plot_inference_result
@@ -93,15 +93,23 @@ if __name__ == '__main__':
     SHOW_PLOTS = False
 
     config_params = load_config(os.path.join(exp_folder, 'config.yml'))
+    
+    s1_bands = config_params.get("sample", {}).get("s1_bands", []) or []
+    s2_bands = config_params.get("sample", {}).get("s2_bands", []) or []
+
+    bands = s1_bands + s2_bands  # This will work even if one of them is missing
+    print(bands)
+    in_channels = len(bands) # config_params["trainer"]["in_channels"]
 
     log_num = config_params["trainer"]["log_num"]
-    in_channels = config_params["trainer"]["in_channels"]
+    # in_channels = config_params["trainer"]["in_channels"]
     classes = config_params["trainer"]["classes"]
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
     batch_size = config_params["trainer"]["batch_size"]
     window_size = config_params["trainer"]["window_size"]
+    patch_size = config_params["sample"]["patch_size"]
     which_label = config_params['data_loader']['which_label']
 
     # LOGGING
@@ -128,8 +136,11 @@ if __name__ == '__main__':
         data_path=os.path.join(root_path,f'data/fold_data/test_{which_label}_fold'),
         mode='test',
         label=which_label,
+        window_size=window_size,
+        patch_size=patch_size,
         folds = None,
-        one_hot_encode=False      
+        one_hot_encode=False,
+        bands=bands      
     )
     # print(test_set.num_classes)
 
@@ -140,8 +151,6 @@ if __name__ == '__main__':
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.eval()
 
-    # calculate IoU
-    test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
     # Initialize accumulators for accuracy metrics
     total_tp, total_fp, total_fn, total_tn = 0, 0, 0, 0
     total_tp_per_class = [0] * classes
@@ -157,7 +166,7 @@ if __name__ == '__main__':
     for i, (image, mask) in enumerate(test_loader):
         image, mask = image.to(device), mask.to(device)
         
-        if int(window_size) == 512:
+        if int(window_size) == patch_size:
             y_pred = model(image).cpu().detach().numpy().squeeze()
         else:
             # Inference with patches, because the data tile size is not the same as window size
@@ -181,25 +190,36 @@ if __name__ == '__main__':
                                    alpha=0,
                                    beta=255,
                                    norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+        s2_false_color = cv2.normalize(np.transpose(image.numpy()[0, [8, 5, 4], :, :], (1,2,0)),
+                                    dst=None,
+                                    alpha=0,
+                                    beta=255,
+                                    norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+
         s1_vv = image.numpy()[0,0,:,:]
         
-        plot_inference_result(s2_rgb, s1_vv, y, y_pred_map, output_folder, i)
+        plot_inference_result(s2_false_color, s1_vv, y, y_pred_map, output_folder, i)
         
         tp, fp, fn, tn = smp.metrics.get_stats(y_pred_map, mask.cpu().squeeze().long(), mode='multiclass', num_classes=classes)
-        # compute metric
-        test_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # TODO find out which reduction is a correct usage
-        test_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro")
-        test_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro")
-        test_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="micro")
-        test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="micro")
-        test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="micro")
 
+        # compute metric
+        test_micro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="micro") # averaging over all pixels
+        test_macro_iou = smp.metrics.iou_score(tp, fp, fn, tn, reduction="macro") # averaging over classes
+        test_f1 = smp.metrics.f1_score(tp, fp, fn, tn, reduction="macro")
+        test_precision = smp.metrics.precision(tp, fp, fn, tn, reduction="macro")
+        test_accuracy = smp.metrics.accuracy(tp, fp, fn, tn, reduction="macro")
+        test_recall = smp.metrics.recall(tp, fp, fn, tn, reduction="macro")
+         
         # Accumulate stats per class
         for class_idx in range(classes):
             total_tp_per_class[class_idx] += tp[class_idx]
             total_fp_per_class[class_idx] += fp[class_idx]
             total_fn_per_class[class_idx] += fn[class_idx]
             total_tn_per_class[class_idx] += tn[class_idx]
+
+        # calculate IoU
+        test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
+
         test_jaccard_index.update(y_pred_map, mask.cpu().squeeze().long())
         test_ious = test_jaccard_index.compute()
 
@@ -238,10 +258,10 @@ if __name__ == '__main__':
     # Compute metrics using total stats
     test_micro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
     test_macro_iou_overall = smp.metrics.iou_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
-    test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-    test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-    test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="micro")
-    test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="micro")
+    test_f1_overall = smp.metrics.f1_score(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+    test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+    test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+    test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="macro")
 
     logger.info(f"Overall Testing Result)")
     logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou_overall, 3)}")

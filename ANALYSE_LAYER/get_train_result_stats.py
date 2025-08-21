@@ -44,12 +44,12 @@ def read_acc_from_log(log_path):
                     macro_iou = metric_value
                 elif metric_name == "Accuracy":
                     accuracy = metric_value
-                # elif metric_name == "Recall":
-                #     recall = metric_value
+                elif metric_name == "Recall":
+                    recall = metric_value
                 elif metric_name == "Precision":
                     precision = metric_value
-                # elif metric_name == "F1":
-                #     f1 = metric_value
+                elif metric_name == "F1":
+                    f1 = metric_value
                 # elif metric_name == "Class wise IoU":
                 #     class_iou.append(float_value)
 
@@ -59,9 +59,9 @@ def read_acc_from_log(log_path):
         'Micro IoU': [micro_iou],
         'Macro IoU': [macro_iou],
         'Accuracy': [accuracy],
-        # 'Recall': [recall],
+        'Recall': [recall],
         'Precision': [precision],
-        # 'F1': [f1],
+        'F1': [f1],
         'Class wise IoU': [class_iou]
     })
 
@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
     exp_root = 'script/experiments'
 
-    exp_paths = sorted([os.path.join(exp_root, exp) for exp in os.listdir(exp_root)])
+    exp_paths = sorted([os.path.join(exp_root, exp) for exp in os.listdir(exp_root) if "final" not in exp])
     print(exp_paths)
     dfs = []
     empty_finetue_acc = []
@@ -101,6 +101,9 @@ if __name__ == "__main__":
 
         df_acc_init = read_acc_from_log(init_accuracy)
         df_param_init = read_param_from_config(init_config)
+        
+        # Replace NaN in the s1_band column with some placeholder value
+        df_param_init["s1_bands"] = df_param_init["s1_bands"].fillna("NA")
 
         # Check if accuracy df is empty
         if df_acc_init.empty:
@@ -120,7 +123,13 @@ if __name__ == "__main__":
         
         for fine_tune_path in fine_tune_paths:
             fine_tune_config = find_files_by_patern(fine_tune_path, 'config*.yml')[0]
-            fine_tune_accuracy = find_files_by_patern(fine_tune_path, 'preds.log')[0]
+            try:
+                fine_tune_accuracy = find_files_by_patern(fine_tune_path, 'preds.log')[0]
+            except IndexError:
+                print(f"{fine_tune_path} has no prediction accuracy. ")
+                with open('no_accuracy_list.txt', 'a') as file:
+                    file.write(fine_tune_path + '\n')
+
             
             df_acc = read_acc_from_log(fine_tune_accuracy)
 
@@ -131,6 +140,9 @@ if __name__ == "__main__":
                 continue
 
             df_param = read_param_from_config(fine_tune_config)
+            
+            # Replace NaN in the s1_band column with some placeholder value
+            df_param["s1_bands"] = df_param["s1_bands"].fillna("NA")
 
             # Join these two dataframes
             merged_df = pd.concat([df_param, df_acc], axis=0, ignore_index=True)
@@ -144,7 +156,7 @@ if __name__ == "__main__":
     columns_to_int = ['log_num', 'tune_log_num']
     df[columns_to_int] = df[columns_to_int].astype(int)
 
-    wanted_columns = ['log_num', 'which_label', 'weights', 'tune_log_num','distill_lamda', 'temperature', 'Mean IoU', 'Micro IoU', 'Macro IoU', 'Accuracy', 'Precision', 'Class wise IoU']
+    wanted_columns = ['log_num', 'which_label', 'weights', 'tune_log_num','distill_lamda', 'temperature', 'freeze_encoder', 'Mean IoU', 'Micro IoU', 'Macro IoU', 'Accuracy', 'Precision', 'Recall', 'F1', 'Class wise IoU']
 
     df.to_csv('exp_metadata.csv', index=False)
     df.to_csv('exp_data.csv', columns=wanted_columns, index=False)

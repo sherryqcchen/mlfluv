@@ -61,6 +61,7 @@ if __name__ == "__main__":
     batch_size = config_params["trainer"]["batch_size"]
     weight_func = config_params["model"]["weights"]
     window_size = config_params["trainer"]["window_size"]
+    patch_size = config_params["sample"]["patch_size"]
     with_extra_urban = config_params["incremental_learning"]['with_extra_urban']
     temperature = 1 # config_params["incremental_learning"]['temperature']
     distill_lamda = 0 # config_params["incremental_learning"]['distill_lamda']
@@ -100,6 +101,8 @@ if __name__ == "__main__":
     train_set = MLFluvDataset(
         data_path=fold_data_path,
         mode='train',
+        window_size=window_size,
+        patch_size=patch_size,
         label='hand',
         folds=train_fold,
         one_hot_encode=False      
@@ -108,6 +111,8 @@ if __name__ == "__main__":
     val_set = MLFluvDataset(
         data_path=fold_data_path,
         mode='val',
+        window_size=window_size,
+        patch_size=patch_size,
         label='hand',
         folds=[0],
         one_hot_encode=False      
@@ -183,6 +188,8 @@ if __name__ == "__main__":
         test_set = MLFluvDataset(
             data_path=os.path.join(root_path, f'data/fold_data/final_test_{which_label}_fold'),
             mode='test',
+            window_size=window_size,
+            patch_size=patch_size,
             label='hand',
             folds=None,
             one_hot_encode=False      
@@ -196,9 +203,6 @@ if __name__ == "__main__":
         # model.load_state_dict(torch.load(checkpoint_path, map_location=device)['model'])
         new_net.load_state_dict(torch.load(checkpoint_path, map_location=device))
         new_net.eval()
-
-        # calculate IoU
-        test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
 
         # Initialize accumulators for accuracy metrics
         total_tp, total_fp, total_fn, total_tn = 0, 0, 0, 0
@@ -215,7 +219,7 @@ if __name__ == "__main__":
         for i, (image, mask) in enumerate(test_loader):
             image, mask = image.to(device), mask.to(device)
             
-            if int(window_size) == 512:
+            if int(window_size) == patch_size:
                 y_pred = new_net(image).cpu().detach().numpy().squeeze()
             else:
                 # Inference with patches, because the data tile size is not the same as window size
@@ -252,6 +256,9 @@ if __name__ == "__main__":
                 total_fp_per_class[class_idx] += fp[class_idx]
                 total_fn_per_class[class_idx] += fn[class_idx]
                 total_tn_per_class[class_idx] += tn[class_idx]
+
+            # calculate IoU
+            test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
 
             test_jaccard_index.update(y_pred_map, mask.cpu().squeeze().long())
             test_ious = test_jaccard_index.compute()

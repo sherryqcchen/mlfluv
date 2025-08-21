@@ -26,6 +26,7 @@ if is_vm:
 else:
     config_path = os.path.join(root_path, 'script/config_k8s.yml')
 
+
 def all_exist(full_list, given_list):
     """
     A function to check whether all  required bands are in filtered ee.Image objects
@@ -65,7 +66,7 @@ def get_lat_lng_string(point_coords):
 
     return coord_str
 
-def ee_buffer_point(coordinates, patch_size=512):
+def ee_buffer_point(coordinates):
     """
     An Earth Engine Python API functiond. 
     Buffer a point to a rectangle with size approximating to 2048*2048 using ee.Geometry object
@@ -77,8 +78,7 @@ def ee_buffer_point(coordinates, patch_size=512):
         aoi (ee.Geometry): the buffered rectangle geometry
     """
     point = ee.Geometry.Point(coordinates)
-    buffer_distance = patch_size * 5
-    aoi = point.buffer(distance=buffer_distance, maxError=4).bounds()
+    aoi = point.buffer(distance=2560, maxError=4).bounds()
     # print(aoi.getInfo())
     # buffered_area = aoi.area(maxError=1).getInfo()
     # print(buffered_area)
@@ -198,11 +198,10 @@ def interpolator(data):
         data = interp(*np.indices(data.shape))
     return data
 
-def download_1_point_data(coords, river_order, 
-                          drainage_area,
-                          patch_size=512,
-                          year=2020, 
-                          VIS_OPTION=False, 
+
+def download_1_point_data(coords,
+                          year=2021, 
+                          VIS_OPTION=True, 
                           s1_bands=['VV', 'VH'], 
                           s2_bands=['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']):
     """
@@ -220,45 +219,45 @@ def download_1_point_data(coords, river_order,
     """    
     coord_string = get_lat_lng_string(coords)
 
-    aoi = ee_buffer_point(coords, patch_size)
+    aoi = ee_buffer_point(coords)
     # print(river_order)
 
-    # Filter from the first day to the last day of a given year
-    start_date = ee.Date.fromYMD(year, 1, 1)
-    end_date = start_date.advance(1, 'year')
+    # Filter from the first day to the last day of a given year 
+    start_date = ee.Date.fromYMD(year, 11, 6)
+    end_date = start_date.advance(1, 'month')
 
     col_filter = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(start_date, end_date))
 
-    col_filter_for_sentinel = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(ee.Date.fromYMD(year,8, 1), ee.Date.fromYMD(year,9, 1)))
+    # col_filter_for_sentinel = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(ee.Date.fromYMD(year,8, 1), ee.Date.fromYMD(year,9, 1)))
 
     # Filter image collection from Google Dynamic World dataset, sentinel-1, sentinel-2
-    dw_col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(col_filter_for_sentinel)
-    s1_col = ee.ImageCollection('COPERNICUS/S1_GRD').filter(col_filter_for_sentinel)
-    s2_col = ee.ImageCollection('COPERNICUS/S2').filter(col_filter_for_sentinel)
+    dw_col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(col_filter)
+    s1_col = ee.ImageCollection('COPERNICUS/S1_GRD').filter(col_filter)
+    s2_col = ee.ImageCollection('COPERNICUS/S2').filter(col_filter)
     print(dw_col.size().getInfo())
 
-    # DW is made on top of Sentinel-2, so they have the same system_index property and these two collections can be joined together 
+        # DW is made on top of Sentinel-2, so they have the same system_index property and these two collections can be joined together 
     dws2_col = ee.Join.saveFirst('s2_img').apply(dw_col, s2_col, ee.Filter.equals(leftField='system:index', rightField='system:index'))
 
-    # Define a function to count masked pixels in each DW label
+        # Define a function to count masked pixels in each DW label
     dws2_col = ee.ImageCollection(dws2_col).map(lambda image: ee_count_masked_dw_percent(image, aoi))
     max_percent = dws2_col.aggregate_max('masked_percentage')
     print(max_percent.getInfo())
 
-    # Get an array of masked_percentage and an array of date for all images in the DW collection
+        # Get an array of masked_percentage and an array of date for all images in the DW collection
     percent_arr = ee.Array(dws2_col.aggregate_array('masked_percentage'))
     date_arr = ee.Array(dws2_col.aggregate_array('system:time_start'))
 
-    # get the first max percent image index
+        # get the first max percent image index
     max_idx = percent_arr.argmax()
     max_time_start = date_arr.get(max_idx)
         # print(dw_col.aggregate_array('system:time_start').getInfo())
     print(f"I find the first date of DW lable with max valid pixel percentage: {ee.Date(max_time_start).format('Y-MM-dd').getInfo()}")
         
-    # Get this first clear date
+        # Get this first clear date
     clear_s2_date = ee.Date(max_time_start)
 
-    # Get DW label of this date
+        # Get DW label of this date
     dws2_image = ee.Image(dws2_col.filterDate(clear_s2_date, clear_s2_date.advance(1, 'day')).first())
 
     s2_image = ee.Image(dws2_image.get('s2_img')).select('B.*')
@@ -305,8 +304,7 @@ def download_1_point_data(coords, river_order,
                     'SAVE_ASSET': False,
                     'ASSET_ID': "users/qiuyangschen"
                     }
-    
-    # pre-process s1 collection
+        # pre-process s1 collection
     s1_processed = wp.s1_preproc(parameter)
     if s1_processed.size().getInfo() != 0:
         s1_id = s1_processed.first().get('system:index')
@@ -326,22 +324,10 @@ def download_1_point_data(coords, river_order,
                 plotter.plot_s1(s1_filled_data, 'vv')
                 plotter.plot_s2_rgb(s2_filled_data)
                 
-            # Merge classes in different LULC products
-            esri_label = ee.ImageCollection("projects/sat-io/open-datasets/landcover/ESRI_Global-LULC_10m_TS").filter(col_filter).mosaic()
-            esri_remap = remap_lulc(esri_label, 'esri_land_cover')
-                
-            esawc_label = ee.Image('ESA/WorldCover/v100/2020')
-            esawc_remap = remap_lulc(esawc_label, 'esa_world_cover')   
-                
-            glc10_label = ee.ImageCollection("projects/sat-io/open-datasets/FROM-GLC10").mosaic()
-            glc10_remap = remap_lulc(glc10_label, 'from_glc10')
-                
+            # Merge classes in different LULC products                
             dw_remap = remap_lulc(dws2_image, 'dynamic_world')  
 
-                # Read these remapped tiles into numpy array, there remapped bands are all called "remapped".
-            esri_arr, _ = convert_ee_image_to_np_arr(esri_remap, 'remapped', aoi)
-            esawc_arr, _ = convert_ee_image_to_np_arr(esawc_remap, 'remapped', aoi)
-            glc10_arr, _ = convert_ee_image_to_np_arr(glc10_remap, 'remapped', aoi)
+            # Read these remapped tiles into numpy array, there remapped bands are all called "remapped".
             dw_arr, _ = convert_ee_image_to_np_arr(dw_remap, 'remapped', aoi)
 
                 # Get accumulative rainfall from CHIRPS dataset
@@ -363,23 +349,12 @@ def download_1_point_data(coords, river_order,
                 rainfall_sum = accumulative_rainfall_total.get('precipitation_sum') # the unit is mm
                 print(f"The average accumulative rainfall within aoi is {rainfall_sum.getInfo()} mm.")
 
-            # Get S2 cloud probability for the s2 image
-            s2_cloud_prob= ee.ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")\
-                                .filter(col_filter)\
-                                .filterDate(clear_s2_date.getRange('day'))\
-                                .first()\
-                                .select('probability')\
-                                .reduceRegion(reducer=ee.Reducer.mean(), geometry=aoi, scale=5000)\
-                                .get('probability')
-            print(f"The cloud probability is:{s2_cloud_prob.getInfo()}")
-
-                # Exporting data, we use the system index of Sentinel-2 and DW data (they share the same index) as part of the point_id
-                # In some cases if the sampling points are close to each other and occured on the same Sentinel-2 tile
-                # We also use lng, lat info in the point_id 
+            # Exporting data, we use the system index of Sentinel-2 and DW data (they share the same index) as part of the point_id
+            # In some cases if the sampling points are close to each other and occured on the same Sentinel-2 tile
+            # We also use lng, lat info in the point_id 
             point_id = s2_id + "_" + coord_string
 
-            # data_path = 'data/full_data/mlfluv_s12lulc_data_STRATIFIED'
-            data_path = f'data/full_data/mlfluv_s12lulc_data_{SAMPLE_MODE}'
+            data_path = f'data/full_data/superslug_s12dw_{SAMPLE_MODE}'
 
             point_path = os.path.join(data_path, point_id) 
 
@@ -392,8 +367,6 @@ def download_1_point_data(coords, river_order,
             meta_dict = {}
             meta_dict['point'] = coords
             meta_dict['year'] = year
-            meta_dict['riv_order'] = river_order
-            meta_dict['drainage_area'] = drainage_area
             meta_dict['aoi'] = aoi.coordinates().getInfo()
             meta_dict['projection'] = s2_proj.getInfo()
             meta_dict['s1_id'] = s1_image.get('system:index').getInfo()
@@ -402,7 +375,6 @@ def download_1_point_data(coords, river_order,
             meta_dict['s2_date'] = clear_s2_date.format('Y-MM-dd').getInfo()
             meta_dict['DW_cover_percentage'] = max_percent.getInfo()
             meta_dict['acc_rainfall'] = rainfall_sum.getInfo()
-            meta_dict['cloud_prob'] = s2_cloud_prob.getInfo()
 
             with open(meta_fname, 'w') as f:
                 w = csv.DictWriter(f, meta_dict.keys())
@@ -411,10 +383,7 @@ def download_1_point_data(coords, river_order,
 
             np.save(os.path.join(point_path, point_id+'_S1.npy'), s1_filled_data)
             np.save(os.path.join(point_path, point_id+'_S2.npy'), s2_filled_data)
-            np.save(os.path.join(point_path, point_id+'_ESRI.npy'), esri_arr)
-            np.save(os.path.join(point_path, point_id+'_ESAWC.npy'), esawc_arr)
             np.save(os.path.join(point_path, point_id+'_DW.npy'), dw_arr)
-            np.save(os.path.join(point_path, point_id+'_GLC10.npy'), glc10_arr)
 
         else:
             print('S1 or S2 has missing bands, skip this point.')
@@ -436,12 +405,9 @@ if __name__ == "__main__":
     S1_BANDS = config['sample']['s1_bands']
     S2_BANDS = config['sample']['s2_bands']
 
-    YEAR = config['sample']['year']
+    YEAR = 2021
 
-    SAMPLE_MODE = 'bare'#config['sample']['sample_mode']
-    SAMPLE_LENGTH = config['sample']['sample_length']
-
-    PATCH_SIZE = config['sample']['patch_size']
+    SAMPLE_MODE = 'MANUAL'
 
     try:
         service_account = config['ee_service_account']
@@ -452,8 +418,7 @@ if __name__ == "__main__":
         ee.Authenticate()
         ee.Initialize()
 
-    # points_path = Path(f'data/Amazon_HydroSHEDS_river_networks/network_points_{SAMPLE_LENGTH}_{SAMPLE_MODE}.csv')
-    points_path = Path(f'data/Amazon_HydroSHEDS_river_networks/network_points_{SAMPLE_MODE}.csv')
+    points_path = Path('script/DATA_LAYER/Uttarakhand_sample_points.csv')
     
     point_list = []
 
@@ -463,19 +428,18 @@ if __name__ == "__main__":
         csv_reader = csv.DictReader(file)
         for row in csv_reader:
             try:
-                coord = tuple([float(row['x']), float(row['y'])])
+                # if the csv header is "x" and "y", change to this: tuple([float(row['x']), float(row['y'])])
+                coord = tuple([float(row['longitude']), float(row['latitude'])]) 
             except:
                 coord = tuple(float(x.strip('\'"')) for x in row['coordinates'].strip('()').split(','))
-            riv_order = int(float(row['riv_order']))
-            da = float(row['upland_drainage_area'])
-            point_list.append((coord,riv_order, da))
+            point_list.append((coord))
 
     # print(point_list)
-    for idx, (point_coord, riv_ord, da) in enumerate(point_list):
+    for idx, (point_coord) in enumerate(point_list):
 
         print(f"{idx}: {point_coord}")
         try:
-            download_1_point_data(point_coord, riv_ord, da, patch_size=PATCH_SIZE, year=YEAR, VIS_OPTION=False, s1_bands=S1_BANDS, s2_bands=S2_BANDS)
+            download_1_point_data(point_coord, year=YEAR, VIS_OPTION=False, s1_bands=S1_BANDS, s2_bands=S2_BANDS)
         except ee.ee_exception.EEException as err:
             print("An EEException occurred:", err)
             print('No valid clear data found within the given time range')

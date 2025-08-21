@@ -99,17 +99,20 @@ class MLFluvDataset(Dataset):
     def __init__(
             self,
             data_path="data/fold_data",
-            window = 512,
+            window_size = 512,
+            patch_size = 512,
             norm = True,
             mode = 'train',
             folds = [0, 1, 2, 3],
             label = None,
-            one_hot_encode = False          
+            one_hot_encode = False,
+            bands = ['VV','VH','B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B10','B11','B12']          
     ):
         """
         Pytorch Dataset class to load samples from the MLFLuv dataset for fluvial system semantic segmentation.
 
         """   
+        
         # print(os.listdir(data_path))
         self.file_paths = [os.path.join(data_path, file) for file in os.listdir(data_path)] # 5 npy files
         self.all_folds = [np.load(file, allow_pickle=True) for file in self.file_paths if file.endswith('.npy')] # len() is 5 because of 5 folds split
@@ -118,13 +121,14 @@ class MLFluvDataset(Dataset):
             # If folds are not specified, all data will be loaded
             self.data = np.concatenate([self.all_folds[idx] for idx in range(len(self.all_folds))], axis=0)
         else:
-            try:
-                self.data = np.concatenate([self.all_folds[idx] for idx in folds], axis=0)
-            except ValueError as e:
-                print('Something wrong in the fold data, go to check the folds using examine_folds.py script and Solve the problem.')
-                raise e                
+            self.data = np.concatenate([self.all_folds[idx] for idx in folds], axis=0)
+
+        self.s1_bands = ['VV', 'VH']
+        self.s2_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
+        self.all_bands = self.s1_bands + self.s2_bands  # Full list of 15 bands
+        self.bands = bands
+        self.window_size = window_size
         
-        self.window = window
         self.mode = mode
         self.norm = norm
         self.label = label
@@ -132,6 +136,13 @@ class MLFluvDataset(Dataset):
 
         if self.one_hot_encode:
             self.label_values = [0, 1, 2, 3, 4, 5, 6]
+    
+    def get_band_indices(self):
+        """
+        Get the indices of selected bands from the full list of available bands.
+        """
+        band_indices = {band: i for i, band in enumerate(self.all_bands)}
+        return [band_indices[band] for band in self.bands if band in band_indices]
             
 
     def transform(self, image, mask, rough_mask=None):
@@ -145,10 +156,10 @@ class MLFluvDataset(Dataset):
                 image, mask = flip(image, mask)
 
             # random crop 256x256
-            if self.window == 512:
+            if self.window_size == self.patch_size:
                 pass
             else:               
-                image, mask = random_crop(image, mask, window=self.window)
+                image, mask = random_crop(image, mask, window=self.window_size) 
 
             image = normalize_per_channel(image)
 
@@ -156,11 +167,11 @@ class MLFluvDataset(Dataset):
             # image = random_mask(image)
 
         elif self.mode == 'val':
-            if self.window == 512:
+            if self.window_size == self.patch_size:
                 pass
             else:      
                 # center crop no rotation (so that val/test are always the same)
-                image, mask = center_crop(image, mask, window=self.window)
+                image, mask = center_crop(image, mask, window=self.window_size)
             image = normalize_per_channel(image)
         else:   
             image = normalize_per_channel(image) # do not crop testing set
@@ -180,11 +191,11 @@ class MLFluvDataset(Dataset):
 
         if self.label == 'hand':
             hand_mask = [path for path in data_paths if path.endswith('hand.tif')][0]
-            hand_mask_arr = rioxarray.open_rasterio(hand_mask).data.squeeze()[:512, :512]
+            hand_mask_arr = rioxarray.open_rasterio(hand_mask).data.squeeze()[:self.patch_size, :self.patch_size]
             mask = hand_mask_arr
         else:
             auto_mask = [path for path in data_paths if path.endswith(f'{self.label}.npy')][0]
-            auto_mask_arr = np.load(auto_mask).squeeze()[:512, :512]  
+            auto_mask_arr = np.load(auto_mask).squeeze()[:self.patch_size, :self.patch_size]  
             mask = auto_mask_arr
         
         # Handle possible invalid data in Sentinel images, mask them in the labels
@@ -192,8 +203,8 @@ class MLFluvDataset(Dataset):
         s1_arr[~np.isfinite(s1_arr)] = np.nan
 
         if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
-            mask_s1 = np.isnan(s1_arr)[:512,:512,0]
-            mask_s2 = np.isnan(s2_arr)[:512,:512,0]
+            mask_s1 = np.isnan(s1_arr)[:self.patch_size,:self.patch_size,0]
+            mask_s2 = np.isnan(s2_arr)[:self.patch_size,:self.patch_size,0]
             
             union_mask = np.logical_or(mask_s1, mask_s2)
 
@@ -208,8 +219,15 @@ class MLFluvDataset(Dataset):
             self.num_classes = 7
 
         # Train on S1 2 bands and S2 13 bands
-        # clip each image to 512*512 as height * width
-        image = np.dstack((s1_arr, s2_arr))[:512, :512, :]  # shape [h, w, band], band=15
+        # clip each image to self.patch_size*self.patch_size as height * width
+
+        full_image = np.dstack((s1_arr, s2_arr))[:self.patch_size, :self.patch_size, :]  # shape [h, w, band], band=15
+
+        # Get indices of selected bands
+        selected_indices = self.get_band_indices()
+
+        # Extract selected bands
+        image = full_image[:, :, selected_indices] 
         image = np.transpose(image, (2, 0, 1))  # shape [band, h, w], band=15
 
         # plot_pair(image, mask, "before_transform")
@@ -246,7 +264,8 @@ if __name__ == '__main__':
     my_dataset = MLFluvDataset(data_path='', 
                                folds=[0], 
                                mode='train',
-                               label='ESRI')
+                               label='ESRI',
+                               bands = ['B2', 'B3', 'B4', 'B8'])
     print(len(my_dataset.data[0]))
     # print(my_dataset.data[0])
 

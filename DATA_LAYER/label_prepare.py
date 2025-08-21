@@ -155,10 +155,11 @@ if __name__=='__main__':
     REMAP_TO_SEDI =  config['data_preprocess']['remap_to_sedi']
     HANDLE_NAN_IN_SENTINEL = config['data_preprocess']['handle_nan_in_sentinel']
     FLUV_POINT_ONLY = config['data_preprocess']['fluv_point_only']
+    print(FLUV_POINT_ONLY)
     MOVE_DATA = config['data_preprocess']['move_data']
 
     WHICH_LABEL = config['data_loader']['which_label']
-    SAMPLE_MODE = 'bare' #config['sample']['sample_mode']
+    SAMPLE_MODE = 'MANUAL'#'bare' #config['sample']['sample_mode']
 
     raw_data_path = os.path.join(root_path,f'data/full_data/')
     
@@ -177,29 +178,29 @@ if __name__=='__main__':
 
         file_paths = [os.path.join(point_path, fname) for fname in os.listdir(point_path)]
 
-        esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
-        glc10_label_path = [file for file in file_paths if file.endswith('GLC10.npy')][0]
+        # esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
+        # glc10_label_path = [file for file in file_paths if file.endswith('GLC10.npy')][0]
         dw_label_path = [file for file in file_paths if file.endswith('DW.npy')][0]
-        esawc_label_path = [file for file in file_paths if file.endswith('ESAWC.npy')][0]
+        # esawc_label_path = [file for file in file_paths if file.endswith('ESAWC.npy')][0]
 
         s1_path = [file for file in file_paths if file.endswith('S1.npy')][0]
         s2_path = [file for file in file_paths if file.endswith('S2.npy')][0]
 
         meta_path = [file for file in file_paths if file.endswith('.csv')][0]
 
-        esri_arr = np.load(esri_label_path)
-        glc10_arr = np.load(glc10_label_path)
+        # esri_arr = np.load(esri_label_path)
+        # glc10_arr = np.load(glc10_label_path)
         dw_arr = np.load(dw_label_path)
-        esawc_arr = np.load(esawc_label_path) 
+        # esawc_arr = np.load(esawc_label_path) 
 
         s1_arr = np.load(s1_path)
         s2_arr = np.load(s2_path)
 
         if REMAP_TO_SEDI:
-            esri_arr = np.where(esri_arr==5, 6, esri_arr)
+            # esri_arr = np.where(esri_arr==5, 6, esri_arr)
             dw_arr = np.where(dw_arr==5, 6, dw_arr)
-            esawc_arr = np.where(esawc_arr==5, 6, esawc_arr)
-            glc10_arr = np.where(glc10_arr==5, 6, glc10_arr)
+            # esawc_arr = np.where(esawc_arr==5, 6, esawc_arr)
+            # glc10_arr = np.where(glc10_arr==5, 6, glc10_arr)
 
         # Create a mask for invalid data in S2 image, replace invalid data with NaNs
         s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
@@ -217,24 +218,24 @@ if __name__=='__main__':
                 union_mask = np.logical_or(mask_s1_aggregated, mask_s2_aggregated)
                 
                 # Updating masked values as zero
-                esri_arr[union_mask] = 0
+                # esri_arr[union_mask] = 0
                 dw_arr[union_mask] = 0 
-                glc10_arr[union_mask] = 0
-                esawc_arr[union_mask] = 0
+                # glc10_arr[union_mask] = 0
+                # esawc_arr[union_mask] = 0
             else:
                 # Drop data has NaNs
                 continue
 
-        np.save(esri_label_path, esri_arr)
-        np.save(esawc_label_path, esawc_arr)
+        # np.save(esri_label_path, esri_arr)
+        # np.save(esawc_label_path, esawc_arr)
         np.save(dw_label_path, dw_arr)
-        np.save(glc10_label_path, glc10_arr)
+        # np.save(glc10_label_path, glc10_arr)
 
-        if PLOT_DATA:
+        # if PLOT_DATA:
             # Plot out all the images to compare how useful 4 global LULC products are. 
             # read meta data of this point
-            meta_df = pd.read_csv(meta_path)
-            plotter.plot_full_data(s1_arr, s2_arr, esri_arr, esawc_arr, dw_arr, glc10_arr, meta_df, True, point_id)
+            # meta_df = pd.read_csv(meta_path)
+            # plotter.plot_full_data(s1_arr, s2_arr, esri_arr, esawc_arr, dw_arr, glc10_arr, meta_df, True, point_id)
         
         # Check if Dynamic earth label has any bare pixel (its pixel value is 5, they will be converted to sediment pixels later)
         if FLUV_POINT_ONLY:
@@ -258,8 +259,8 @@ if __name__=='__main__':
 
     # The path for storing the data after preprocess
     # dest_path = os.path.join(os.path.join(root_path,'data/clean_data'), f'mlfluv_s12lulc_data_clean_{SAMPLE_MODE}')
-    dest_path = os.path.join(os.path.join(root_path,'data/clean_data'), f'mlfluv_incremental_data_{SAMPLE_MODE}')
-    
+    # dest_path = os.path.join(os.path.join(root_path,'data/clean_data'), f'mlfluv_incremental_data_{SAMPLE_MODE}')
+    dest_path = os.path.join(os.path.join(root_path,'data/clean_data'), f'superslug_s12dw_data_clean_{SAMPLE_MODE}')
 
     with open(filename, 'r') as f:
         paths = f.readlines()
@@ -274,7 +275,7 @@ if __name__=='__main__':
         file_paths = [os.path.join(path, fname) for fname in os.listdir(path)]
 
         dw_label_path = [file for file in file_paths if file.endswith('DW.npy')][0]
-        esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
+        # esri_label_path = [file for file in file_paths if file.endswith('ESRI.npy')][0]
 
         s1_fluv_path = [file for file in file_paths if file.endswith('S1.npy')][0]
         s2_fluv_path = [file for file in file_paths if file.endswith('S2.npy')][0]
@@ -291,7 +292,7 @@ if __name__=='__main__':
             convert_npy_to_tiff(s1_fluv_path, 's1', meta_path, new_path)
             convert_npy_to_tiff(s2_fluv_path, 's2', meta_path, new_path)
             convert_npy_to_tiff(dw_label_path, 'label', meta_path, new_path, remap_to_sedi=False)   
-            convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path, remap_to_sedi=False)  
+            # convert_npy_to_tiff(esri_label_path, 'label', meta_path, new_path, remap_to_sedi=False)  
         if MOVE_DATA:
             for fname in os.listdir(path):
                 file_path = os.path.join(path, fname)
