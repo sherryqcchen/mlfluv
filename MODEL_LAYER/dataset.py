@@ -99,7 +99,8 @@ class MLFluvDataset(Dataset):
     def __init__(
             self,
             data_path="data/fold_data",
-            window = 512,
+            window_size = 512,
+            patch_size = 512,
             norm = True,
             mode = 'train',
             folds = [0, 1, 2, 3],
@@ -126,7 +127,7 @@ class MLFluvDataset(Dataset):
         self.s2_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
         self.all_bands = self.s1_bands + self.s2_bands  # Full list of 15 bands
         self.bands = bands
-        self.window = window
+        self.window_size = window_size
         self.mode = mode
         self.norm = norm
         self.label = label
@@ -154,10 +155,10 @@ class MLFluvDataset(Dataset):
                 image, mask = flip(image, mask)
 
             # random crop 256x256
-            if self.window == 512:
+            if self.window_size == self.patch_size:
                 pass
             else:               
-                image, mask = random_crop(image, mask, window=self.window)
+                image, mask = random_crop(image, mask, window=self.window_size) 
 
             image = normalize_per_channel(image)
 
@@ -165,11 +166,11 @@ class MLFluvDataset(Dataset):
             # image = random_mask(image)
 
         elif self.mode == 'val':
-            if self.window == 512:
+            if self.window_size == self.patch_size:
                 pass
             else:      
                 # center crop no rotation (so that val/test are always the same)
-                image, mask = center_crop(image, mask, window=self.window)
+                image, mask = center_crop(image, mask, window=self.window_size)
             image = normalize_per_channel(image)
         else:   
             image = normalize_per_channel(image) # do not crop testing set
@@ -189,11 +190,11 @@ class MLFluvDataset(Dataset):
 
         if self.label == 'hand':
             hand_mask = [path for path in data_paths if path.endswith('hand.tif')][0]
-            hand_mask_arr = rioxarray.open_rasterio(hand_mask).data.squeeze()[:512, :512]
+            hand_mask_arr = rioxarray.open_rasterio(hand_mask).data.squeeze()[:self.patch_size, :self.patch_size]
             mask = hand_mask_arr
         else:
             auto_mask = [path for path in data_paths if path.endswith(f'{self.label}.npy')][0]
-            auto_mask_arr = np.load(auto_mask).squeeze()[:512, :512]  
+            auto_mask_arr = np.load(auto_mask).squeeze()[:self.patch_size, :self.patch_size]  
             mask = auto_mask_arr
         
         # Handle possible invalid data in Sentinel images, mask them in the labels
@@ -201,8 +202,8 @@ class MLFluvDataset(Dataset):
         s1_arr[~np.isfinite(s1_arr)] = np.nan
 
         if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
-            mask_s1 = np.isnan(s1_arr)[:512,:512,0]
-            mask_s2 = np.isnan(s2_arr)[:512,:512,0]
+            mask_s1 = np.isnan(s1_arr)[:self.patch_size,:self.patch_size,0]
+            mask_s2 = np.isnan(s2_arr)[:self.patch_size,:self.patch_size,0]
             
             union_mask = np.logical_or(mask_s1, mask_s2)
 
@@ -217,12 +218,10 @@ class MLFluvDataset(Dataset):
             self.num_classes = 7
 
         # Train on S1 2 bands and S2 13 bands
-        # clip each image to 512*512 as height * width
-        
-        #TODO: add a module that can customize train input bands based on 
+        # clip each image to self.patch_size*self.patch_size as height * width
 
-        full_image = np.dstack((s1_arr, s2_arr))[:512, :512, :]  # shape [h, w, band], band=15
-        
+        full_image = np.dstack((s1_arr, s2_arr))[:self.patch_size, :self.patch_size, :]  # shape [h, w, band], band=15
+
         # Get indices of selected bands
         selected_indices = self.get_band_indices()
 

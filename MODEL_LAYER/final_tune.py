@@ -58,6 +58,7 @@ if __name__ == "__main__":
     batch_size = config_params["trainer"]["batch_size"]
     weight_func = config_params["model"]["weights"]
     window_size = config_params["trainer"]["window_size"]
+    patch_size = config_params["sample"]["patch_size"]
     with_extra_urban = config_params["incremental_learning"]['with_extra_urban']
     temperature = 1 # config_params["incremental_learning"]['temperature']
     distill_lamda = 0 #config_params["incremental_learning"]['distill_lamda']
@@ -98,6 +99,8 @@ if __name__ == "__main__":
         data_path=os.path.join(config_params['data_loader']['train_paths'], f'final_test_{which_label}_4_fold'),
         mode='train',
         label='hand',
+        window_size=window_size,
+        patch_size=patch_size,
         folds=train_fold,
         one_hot_encode=False,
         bands = bands      
@@ -107,6 +110,8 @@ if __name__ == "__main__":
         data_path=os.path.join(config_params['data_loader']['train_paths'], f'final_test_{which_label}_fold'),
         mode='val',
         label='hand',
+        window_size=window_size,
+        patch_size=patch_size,
         folds=[0],
         one_hot_encode=False,
         bands = bands      
@@ -172,6 +177,8 @@ if __name__ == "__main__":
         data_path= os.path.join(root_path, f'data/fold_data/test_{which_label}_fold'),
         #os.path.join(config_params['data_loader']['train_paths'], f'final_test_{which_label}_fold'),
         mode='test',
+        window_size=window_size,
+        patch_size=patch_size,
         label='hand',
         folds=None,
         one_hot_encode=False,
@@ -202,7 +209,7 @@ if __name__ == "__main__":
     for i, (image, mask) in enumerate(test_loader):
         image, mask = image.to(device), mask.to(device)
         
-        if int(window_size) == 512:
+        if int(window_size) == patch_size:
             y_pred = final_net(image).cpu().detach().numpy().squeeze()
         else:
             # Inference with patches, because the data tile size is not the same as window size

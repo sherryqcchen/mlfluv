@@ -87,14 +87,24 @@ def plot_s1(s1_array, vis_option='VV'):
         plt.imshow(rgb_arr)
     plt.show()
 
-def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig_name=None, which_label='ESRI'):
+def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig_name=None, which_label='ESRI', s2_vis_false=True):
 
-    s2 = cv2.normalize(s2_array[:, :, [3,2,1]],
+    s2_rgb = cv2.normalize(s2_array[:, :, [3,2,1]],
                     dst=None,
                     alpha=0,
                     beta=255,
                     norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+    s2_false_color = cv2.normalize(s2_array[:, :, [7, 3, 2]],
+                               dst=None,
+                               alpha=0,
+                               beta=255,
+                               norm_type=cv2.NORM_MINMAX).astype(np.uint8)
     s1 = s1_array[:,:,0]
+    
+    if s2_vis_false:
+        s2 = s2_false_color
+    else:
+        s2 = s2_rgb
 
     lulc_cmap = mpl.colors.ListedColormap(['#6BF5FF', '#009600', '#CCFF99', '#4183C4', '#FA0000','#B4B4B4', '#FFBB22'])
 
@@ -102,7 +112,7 @@ def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig
 
     for i, ax in enumerate(axes.flat):
         if i == 0:
-            im = ax.imshow(s1)
+            im = ax.imshow(s1, cmap='gray')
             ax.set_title('Sentinel-1 VV polarization', fontsize=20)
         elif i == 1:
             im = ax.imshow(s2)
@@ -139,7 +149,7 @@ def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig
 
     
 
-def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_array, meta_info, savefig=False, fig_name=None):
+def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_array, meta_info, savefig=False, fig_name=None, s2_vis_false=True):
     """
     Plot Sentinel-1&2 images and 4 types of land cover products, expot to png.
 
@@ -154,11 +164,21 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
         savefig (bool, optional): Whether save the plot. Defaults to False.
         fig_name (str, optional): svaed figure name. Defaults to None.
     """    
-    s2 = cv2.normalize(s2_array[:, :, [3,2,1]],
+    s2_rgb = cv2.normalize(s2_array[:, :, [3,2,1]],
                         dst=None,
                         alpha=0,
                         beta=255,
                         norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+    s2_false_color = cv2.normalize(s2_array[:, :, [7, 3, 2]],
+                               dst=None,
+                               alpha=0,
+                               beta=255,
+                               norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+    if s2_vis_false:
+        s2 = s2_false_color
+    else:
+        s2 = s2_rgb
+
     s1 = s1_array[:,:,0]
     
     lulc_cmap = mpl.colors.ListedColormap(['#6BF5FF', '#009600', '#CCFF99', '#4183C4', '#FA0000','#B4B4B4', '#FFBB22'])
@@ -167,11 +187,11 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
 
     for i, ax in enumerate(axes.flat):
         if i == 0:
-            im = ax.imshow(s1)
+            im = ax.imshow(s1, cmap='gray')
             ax.set_title('Sentinel-1 VV polarization', fontsize=20)
         elif i == 1:
             im = ax.imshow(s2)
-            ax.set_title('Sentinel-2 RGB stack', fontsize=20)
+            ax.set_title('Sentinel-2 false color stack', fontsize=20)
         elif i == 2:
             im = ax.imshow(esri_array, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
             ax.set_title('ESRI label', fontsize=20)

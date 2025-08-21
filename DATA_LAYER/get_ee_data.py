@@ -26,7 +26,6 @@ if is_vm:
 else:
     config_path = os.path.join(root_path, 'script/config_k8s.yml')
 
-
 def all_exist(full_list, given_list):
     """
     A function to check whether all  required bands are in filtered ee.Image objects
@@ -66,7 +65,7 @@ def get_lat_lng_string(point_coords):
 
     return coord_str
 
-def ee_buffer_point(coordinates):
+def ee_buffer_point(coordinates, patch_size=512):
     """
     An Earth Engine Python API functiond. 
     Buffer a point to a rectangle with size approximating to 2048*2048 using ee.Geometry object
@@ -78,7 +77,8 @@ def ee_buffer_point(coordinates):
         aoi (ee.Geometry): the buffered rectangle geometry
     """
     point = ee.Geometry.Point(coordinates)
-    aoi = point.buffer(distance=2560, maxError=4).bounds()
+    buffer_distance = patch_size * 5
+    aoi = point.buffer(distance=buffer_distance, maxError=4).bounds()
     # print(aoi.getInfo())
     # buffered_area = aoi.area(maxError=1).getInfo()
     # print(buffered_area)
@@ -198,9 +198,9 @@ def interpolator(data):
         data = interp(*np.indices(data.shape))
     return data
 
-
 def download_1_point_data(coords, river_order, 
-                          drainage_area,  
+                          drainage_area,
+                          patch_size=512,
                           year=2020, 
                           VIS_OPTION=False, 
                           s1_bands=['VV', 'VH'], 
@@ -220,11 +220,11 @@ def download_1_point_data(coords, river_order,
     """    
     coord_string = get_lat_lng_string(coords)
 
-    aoi = ee_buffer_point(coords)
+    aoi = ee_buffer_point(coords, patch_size)
     # print(river_order)
 
-    # Filter from the first day to the last day of a given year 
-    start_date = ee.Date.fromYMD(year,1, 1)
+    # Filter from the first day to the last day of a given year
+    start_date = ee.Date.fromYMD(year, 1, 1)
     end_date = start_date.advance(1, 'year')
 
     col_filter = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(start_date, end_date))
@@ -237,28 +237,28 @@ def download_1_point_data(coords, river_order,
     s2_col = ee.ImageCollection('COPERNICUS/S2').filter(col_filter_for_sentinel)
     print(dw_col.size().getInfo())
 
-        # DW is made on top of Sentinel-2, so they have the same system_index property and these two collections can be joined together 
+    # DW is made on top of Sentinel-2, so they have the same system_index property and these two collections can be joined together 
     dws2_col = ee.Join.saveFirst('s2_img').apply(dw_col, s2_col, ee.Filter.equals(leftField='system:index', rightField='system:index'))
 
-        # Define a function to count masked pixels in each DW label
+    # Define a function to count masked pixels in each DW label
     dws2_col = ee.ImageCollection(dws2_col).map(lambda image: ee_count_masked_dw_percent(image, aoi))
     max_percent = dws2_col.aggregate_max('masked_percentage')
     print(max_percent.getInfo())
 
-        # Get an array of masked_percentage and an array of date for all images in the DW collection
+    # Get an array of masked_percentage and an array of date for all images in the DW collection
     percent_arr = ee.Array(dws2_col.aggregate_array('masked_percentage'))
     date_arr = ee.Array(dws2_col.aggregate_array('system:time_start'))
 
-        # get the first max percent image index
+    # get the first max percent image index
     max_idx = percent_arr.argmax()
     max_time_start = date_arr.get(max_idx)
         # print(dw_col.aggregate_array('system:time_start').getInfo())
     print(f"I find the first date of DW lable with max valid pixel percentage: {ee.Date(max_time_start).format('Y-MM-dd').getInfo()}")
         
-        # Get this first clear date
+    # Get this first clear date
     clear_s2_date = ee.Date(max_time_start)
 
-        # Get DW label of this date
+    # Get DW label of this date
     dws2_image = ee.Image(dws2_col.filterDate(clear_s2_date, clear_s2_date.advance(1, 'day')).first())
 
     s2_image = ee.Image(dws2_image.get('s2_img')).select('B.*')
@@ -274,15 +274,15 @@ def download_1_point_data(coords, river_order,
         
     s1_col = s1_col.map(ee_get_date_diff).sort('date_diff')
 
-        # The first image in the sorted collection is the image of the closest date
-        # we use mosaic here because sometime it only has half a tile, in this case we mosaic the two tiles with closest date
-        # s1_image = s1_col.mosaic().select('VV', 'VH') 
+    # The first image in the sorted collection is the image of the closest date
+    # we use mosaic here because sometime it only has half a tile, in this case we mosaic the two tiles with closest date
+    # s1_image = s1_col.mosaic().select('VV', 'VH') 
     clear_s1_date = ee.Date(s1_col.first().get('system:time_start'))
         
     print(f"The chosen s1 image date: {clear_s1_date.format('Y-MM-dd').getInfo()}")
         
-        # preprocess s1 image using https://github.com/adugnag/gee_s1_ard/blob/main/python-api/s1_ard.py
-        # Parameters
+    # preprocess s1 image using https://github.com/adugnag/gee_s1_ard/blob/main/python-api/s1_ard.py
+    # Parameters
     dem_cop = ee.ImageCollection('COPERNICUS/DEM/GLO30').select('DEM').filterBounds(aoi).mosaic()
     parameter = {'START_DATE': clear_s1_date.advance(-1, 'day'),
                     'STOP_DATE': clear_s1_date.advance(1, 'day'),        
@@ -305,7 +305,8 @@ def download_1_point_data(coords, river_order,
                     'SAVE_ASSET': False,
                     'ASSET_ID': "users/qiuyangschen"
                     }
-        # pre-process s1 collection
+    
+    # pre-process s1 collection
     s1_processed = wp.s1_preproc(parameter)
     if s1_processed.size().getInfo() != 0:
         s1_id = s1_processed.first().get('system:index')
@@ -440,6 +441,8 @@ if __name__ == "__main__":
     SAMPLE_MODE = 'bare'#config['sample']['sample_mode']
     SAMPLE_LENGTH = config['sample']['sample_length']
 
+    PATCH_SIZE = config['sample']['patch_size']
+
     try:
         service_account = config['ee_service_account']
         credentials = ee.ServiceAccountCredentials(service_account, config['ee_api_key'])
@@ -472,7 +475,7 @@ if __name__ == "__main__":
 
         print(f"{idx}: {point_coord}")
         try:
-            download_1_point_data(point_coord, riv_ord, da, year=YEAR, VIS_OPTION=False, s1_bands=S1_BANDS, s2_bands=S2_BANDS)
+            download_1_point_data(point_coord, riv_ord, da, patch_size=PATCH_SIZE, year=YEAR, VIS_OPTION=False, s1_bands=S1_BANDS, s2_bands=S2_BANDS)
         except ee.ee_exception.EEException as err:
             print("An EEException occurred:", err)
             print('No valid clear data found within the given time range')

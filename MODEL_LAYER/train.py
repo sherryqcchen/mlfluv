@@ -59,6 +59,7 @@ if __name__ == "__main__":
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
     window_size = config_params["trainer"]["window_size"]
+    patch_size = config_params["sample"]["patch_size"]
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
 
@@ -98,7 +99,8 @@ if __name__ == "__main__":
         data_path=fold_data_path,
         mode='train',
         folds=train_fold,
-        window=window_size,
+        window_size=window_size,
+        patch_size=patch_size
         label=which_label,
         one_hot_encode=False,
         bands=bands
@@ -108,7 +110,8 @@ if __name__ == "__main__":
         data_path=fold_data_path,
         mode='val',
         folds=valid_fold,
-        window=window_size, 
+        window_size=window_size,
+        patch_size=patch_size,
         label=which_label,
         one_hot_encode=False,
         bands=bands

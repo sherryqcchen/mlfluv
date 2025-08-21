@@ -109,6 +109,7 @@ if __name__ == '__main__':
     lr = config_params["trainer"]["learning_rate"]
     batch_size = config_params["trainer"]["batch_size"]
     window_size = config_params["trainer"]["window_size"]
+    patch_size = config_params["sample"]["patch_size"]
     which_label = config_params['data_loader']['which_label']
 
     # LOGGING
@@ -135,6 +136,8 @@ if __name__ == '__main__':
         data_path=os.path.join(root_path,f'data/fold_data/test_{which_label}_fold'),
         mode='test',
         label=which_label,
+        window_size=window_size,
+        patch_size=patch_size,
         folds = None,
         one_hot_encode=False,
         bands=bands      
@@ -163,7 +166,7 @@ if __name__ == '__main__':
     for i, (image, mask) in enumerate(test_loader):
         image, mask = image.to(device), mask.to(device)
         
-        if int(window_size) == 512:
+        if int(window_size) == patch_size:
             y_pred = model(image).cpu().detach().numpy().squeeze()
         else:
             # Inference with patches, because the data tile size is not the same as window size
