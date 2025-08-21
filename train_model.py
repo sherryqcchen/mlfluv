@@ -7,6 +7,7 @@ from UTILS import utils
 
 script_path = 'script/'
 script_path, is_vm = utils.update_root_path_for_machine(root_path=script_path)
+print(script_path)
 
 if is_vm:
     config_path = os.path.join(script_path,'config.yml')
@@ -15,12 +16,14 @@ else:
 
 # Split data into 5 folds for train, validation 
 # When change labels among ESRI, DW, ESAWC, only re-run this step
-# subprocess.run(['python', os.path.join(script_path,'DATA_LAYER/split_data.py'), '--config_path', config_path])
+subprocess.run(['python', os.path.join(script_path,'DATA_LAYER/split_data.py'), '--config_path', config_path])
 
 # Train initial UNet model with a given label from existing LULC maps
-# subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/train.py', '--config_path'), config_path])
+subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/train.py'), '--config_path', config_path])
+
 # Make predition on the trained model
-# subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/inference.py'), '--config_path', config_path])
+subprocess.run(['python', os.path.join(script_path,'MODEL_LAYER/inference.py'), '--config_path', config_path])
+
 # Fine tune the model by add a new class (sediment), using new data for training as well.
 
 # Grid search to tune hyperparameters for incremental learning

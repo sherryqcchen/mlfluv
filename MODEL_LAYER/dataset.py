@@ -128,6 +128,7 @@ class MLFluvDataset(Dataset):
         self.all_bands = self.s1_bands + self.s2_bands  # Full list of 15 bands
         self.bands = bands
         self.window_size = window_size
+        
         self.mode = mode
         self.norm = norm
         self.label = label

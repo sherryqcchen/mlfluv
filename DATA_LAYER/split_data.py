@@ -141,7 +141,7 @@ if __name__ == '__main__':
     root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
 
     if is_vm:
-        config_path = os.path.join(root_path,'script/config_1003.yml')
+        config_path = os.path.join(root_path,'script/config.yml')
     else:
         config_path = os.path.join(root_path, 'script/config_k8s.yml')
 
@@ -194,7 +194,7 @@ if __name__ == '__main__':
 
         # Split hand labelled images into 5 folds
         print('Getting 5 folds of test data.')
-        final_test_folders = os.listdir('/exports/csce/datastore/geos/users/s2135982/MLFLUV_DATA/final_test_data')
+        final_test_folders = os.listdir('data/labelled_data/final_test_data')
         final_test_list = [os.path.join(test_data_path, file) for file in final_test_folders]
         split_n_folds(1, final_test_list, save_dir=os.path.join(root_path, f'data/fold_data/final_test_{WHICH_LABEL}_fold'), which_label=WHICH_LABEL)
 
