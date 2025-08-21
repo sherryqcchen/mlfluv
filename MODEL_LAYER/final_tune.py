@@ -187,9 +187,6 @@ if __name__ == "__main__":
     final_net.load_state_dict(torch.load(best_final_checkpoint_path, map_location=device))
     final_net.eval()
 
-    # calculate IoU
-    test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
-
     # Initialize accumulators for accuracy metrics
     total_tp, total_fp, total_fn, total_tn = 0, 0, 0, 0
     total_tp_per_class = [0] * classes
@@ -223,9 +220,15 @@ if __name__ == "__main__":
                                 alpha=0,
                                 beta=255,
                                 norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+        s2_false_color = cv2.normalize(np.transpose(image.numpy()[0, [8, 5, 4], :, :], (1,2,0)),
+                               dst=None,
+                               alpha=0,
+                               beta=255,
+                               norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+
         s1_vv = image.cpu().numpy()[0,0,:,:]
         
-        plot_inference_result(s2_rgb, s1_vv, y, y_pred_map, os.path.join(output_folder,'preds'), i)
+        plot_inference_result(s2_false_color, s1_vv, y, y_pred_map, os.path.join(output_folder,'preds'), i)
         
         
         tp, fp, fn, tn = smp.metrics.get_stats(y_pred_map, mask.cpu().squeeze().long(), mode='multiclass', num_classes=classes)
@@ -243,6 +246,9 @@ if __name__ == "__main__":
             total_fp_per_class[class_idx] += fp[class_idx]
             total_fn_per_class[class_idx] += fn[class_idx]
             total_tn_per_class[class_idx] += tn[class_idx]
+
+        # calculate IoU
+        test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
 
         test_jaccard_index.update(y_pred_map, mask.cpu().squeeze().long())
         test_ious = test_jaccard_index.compute()

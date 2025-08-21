@@ -204,9 +204,6 @@ if __name__ == "__main__":
         new_net.load_state_dict(torch.load(checkpoint_path, map_location=device))
         new_net.eval()
 
-        # calculate IoU
-        test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
-
         # Initialize accumulators for accuracy metrics
         total_tp, total_fp, total_fn, total_tn = 0, 0, 0, 0
         total_tp_per_class = [0] * classes
@@ -259,6 +256,9 @@ if __name__ == "__main__":
                 total_fp_per_class[class_idx] += fp[class_idx]
                 total_fn_per_class[class_idx] += fn[class_idx]
                 total_tn_per_class[class_idx] += tn[class_idx]
+            
+            # calculate IoU
+            test_jaccard_index = JaccardIndex(task='multiclass', num_classes=classes, ignore_index=0, average='none').to(device)
 
             test_jaccard_index.update(y_pred_map, mask.cpu().squeeze().long())
             test_ious = test_jaccard_index.compute()
