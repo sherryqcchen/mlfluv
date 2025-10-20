@@ -58,7 +58,7 @@ if __name__ == "__main__":
     batch_size = config_params["trainer"]["batch_size"]
     weight_func = config_params["model"]["weights"]
     window_size = config_params["trainer"]["window_size"]
-    patch_size = config_params["sample"]["patch_size"]
+    patch_size = 512 #config_params["sample"]["patch_size"]
     with_extra_urban = config_params["incremental_learning"]['with_extra_urban']
     temperature = 1 # config_params["incremental_learning"]['temperature']
     distill_lamda = 0 #config_params["incremental_learning"]['distill_lamda']
@@ -301,6 +301,8 @@ if __name__ == "__main__":
     test_precision_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="macro")
     test_accuracy_overall = smp.metrics.accuracy(total_tp, total_fp, total_fn, total_tn, reduction="macro")
     test_recall_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="macro")
+    test_recall_per_class_overall = smp.metrics.recall(total_tp, total_fp, total_fn, total_tn, reduction="none")
+    test_precision_per_class_overall = smp.metrics.precision(total_tp, total_fp, total_fn, total_tn, reduction="none")
 
     logger.info(f"Overall Testing Result)")
     logger.info(f"{'':<10}Mean IOU{'':<1} ----> {round(test_miou_overall, 3)}")
@@ -311,3 +313,5 @@ if __name__ == "__main__":
     logger.info(f"{'':<10}Precision{'':<1} ----> {round(test_precision_overall.item(), 3)}")
     logger.info(f"{'':<10}F1{'':<1} ----> {round(test_f1_overall.item(), 3)}")
     logger.info(f"{'':<10}Class wise IoU{'':<1} ----> {class_iou_overall}")
+    logger.info(f"{'':<10}Recall per class{'':<1} ----> {test_recall_per_class_overall.tolist()}")
+    logger.info(f"{'':<10}Precision per class{'':<1} ----> {test_precision_per_class_overall.tolist()}")
