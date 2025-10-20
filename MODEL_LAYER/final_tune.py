@@ -129,7 +129,7 @@ if __name__ == "__main__":
     # SET LOSS, OPTIMIZER
     if loss_func == "CrossEntropyLoss":
         criterion = nn.CrossEntropyLoss(reduction='mean',
-                                        # weight=weights,
+                                        weight=weights,
                                         label_smoothing=0.01) 
                                         # ignore_index=0)
     elif loss_func == "FocalLoss":
@@ -313,5 +313,5 @@ if __name__ == "__main__":
     logger.info(f"{'':<10}Precision{'':<1} ----> {round(test_precision_overall.item(), 3)}")
     logger.info(f"{'':<10}F1{'':<1} ----> {round(test_f1_overall.item(), 3)}")
     logger.info(f"{'':<10}Class wise IoU{'':<1} ----> {class_iou_overall}")
-    logger.info(f"{'':<10}Recall per class{'':<1} ----> {test_recall_per_class_overall.tolist()}")
-    logger.info(f"{'':<10}Precision per class{'':<1} ----> {test_precision_per_class_overall.tolist()}")
+    logger.info(f"{'':<10}Recall per class{'':<1} ----> {torch.mean(test_recall_per_class_overall, dim=0)}")
+    logger.info(f"{'':<10}Precision per class{'':<1} ----> {torch.mean(test_precision_per_class_overall, dim=0)}")
