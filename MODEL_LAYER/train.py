@@ -97,10 +97,10 @@ if __name__ == "__main__":
 
     train_set = MLFluvDataset(
         data_path=fold_data_path,
-        mode='train',
+        mode='initial_train',
         folds=train_fold,
         window_size=window_size,
-        patch_size=patch_size
+        patch_size=patch_size,
         label=which_label,
         one_hot_encode=False,
         bands=bands
@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
     val_set = MLFluvDataset(
         data_path=fold_data_path,
-        mode='val',
+        mode='initial_train',
         folds=valid_fold,
         window_size=window_size,
         patch_size=patch_size,

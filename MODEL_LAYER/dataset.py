@@ -106,7 +106,7 @@ class MLFluvDataset(Dataset):
             folds = [0, 1, 2, 3],
             label = None,
             one_hot_encode = False,
-            bands = ['VV','VH','B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B10','B11','B12']          
+            bands = ['VV','VH','B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B11','B12']    #'B10',      
     ):
         """
         Pytorch Dataset class to load samples from the MLFLuv dataset for fluvial system semantic segmentation.
@@ -124,11 +124,11 @@ class MLFluvDataset(Dataset):
             self.data = np.concatenate([self.all_folds[idx] for idx in folds], axis=0)
 
         self.s1_bands = ['VV', 'VH']
-        self.s2_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
+        self.s2_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B11', 'B12'] # 'B10'
         self.all_bands = self.s1_bands + self.s2_bands  # Full list of 15 bands
         self.bands = bands
         self.window_size = window_size
-        
+        self.patch_size = patch_size
         self.mode = mode
         self.norm = norm
         self.label = label
@@ -187,7 +187,7 @@ class MLFluvDataset(Dataset):
         s2_path = [path for path in data_paths if path.endswith('S2.npy')][0]     
 
         s1_arr = np.load(s1_path) # shape [h, w, band], band=2
-        s2_arr = np.load(s2_path) # shape [h, w, band], band=13
+        s2_arr = np.load(s2_path) # shape [h, w, band], band=12
 
         if self.label == 'hand':
             hand_mask = [path for path in data_paths if path.endswith('hand.tif')][0]
@@ -197,18 +197,42 @@ class MLFluvDataset(Dataset):
             auto_mask = [path for path in data_paths if path.endswith(f'{self.label}.npy')][0]
             auto_mask_arr = np.load(auto_mask).squeeze()[:self.patch_size, :self.patch_size]  
             mask = auto_mask_arr
+
+            if self.mode == 'initial_train':
+                mask = np.where(mask == 6, 5, mask)
         
         # Handle possible invalid data in Sentinel images, mask them in the labels
         s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
         s1_arr[~np.isfinite(s1_arr)] = np.nan
 
-        if np.isnan(s2_arr).any() or np.isnan(s1_arr).any():
-            mask_s1 = np.isnan(s1_arr)[:self.patch_size,:self.patch_size,0]
-            mask_s2 = np.isnan(s2_arr)[:self.patch_size,:self.patch_size,0]
-            
-            union_mask = np.logical_or(mask_s1, mask_s2)
+        # Slice both S1 and S2 arrays to the required patch size first
+        # This ensures all subsequent operations only act on the patch data.
 
+        patch_s1 = s1_arr[:self.patch_size, :self.patch_size, :]
+        patch_s2 = s2_arr[:self.patch_size, :self.patch_size, :]
+
+        # Check if ANY NaN exists in the entire patch array (across all dimensions)
+        if np.isnan(patch_s2).any() or np.isnan(patch_s1).any():
+            
+            # 2. Find NaNs in S1 and S2 across ALL channels (axis=2)
+            # The result of np.isnan is a (H, W, C) boolean array.
+            # np.any(..., axis=2) collapses this to a (H, W) boolean array.
+            
+            # Check if ANY of the S1 channels is NaN at that (row, col) pixel
+            mask_s1_nan = np.isnan(patch_s1).any(axis=2) 
+            
+            # Check if ANY of the S2 channels is NaN at that (row, col) pixel
+            mask_s2_nan = np.isnan(patch_s2).any(axis=2)
+            
+            # 3. Combine the masks: a pixel is invalid if either S1 or S2 is invalid there
+            union_mask = np.logical_or(mask_s1_nan, mask_s2_nan)
+
+            # 4. Apply the union mask to your label/output mask (assuming 'mask' is a 2D array)
             mask[union_mask] = 0
+
+            # Apply the mask to S1 and S2 patches to set NaN pixels to 0
+            patch_s1[union_mask] = 0
+            patch_s2[union_mask] = 0
 
         # mask no data label as clouds (the class that has not shown in the dataset yet)
         mask = np.where((mask >= 0) & (mask <= 6), mask, 0)
@@ -221,7 +245,12 @@ class MLFluvDataset(Dataset):
         # Train on S1 2 bands and S2 13 bands
         # clip each image to self.patch_size*self.patch_size as height * width
 
-        full_image = np.dstack((s1_arr, s2_arr))[:self.patch_size, :self.patch_size, :]  # shape [h, w, band], band=15
+        full_image = np.dstack((patch_s1, patch_s2))[:self.patch_size, :self.patch_size, :]  # shape [h, w, band], band=15
+
+        # --- TEMPORARY NaN CHECK ---
+        if isinstance(full_image, np.ndarray) and np.isnan(full_image).any():
+            raise ValueError(f"NaN found in input tensor image before returning for index {index}")
+        # ---------------------------
 
         # Get indices of selected bands
         selected_indices = self.get_band_indices()
@@ -232,7 +261,7 @@ class MLFluvDataset(Dataset):
 
         # plot_pair(image, mask, "before_transform")
         
-        # Train only on Sen2 13 bands
+        # Train only on Sen2 full bands 
         # image = s2_image
 
         image, mask = self.transform(image, mask) # image shape [windows_size, window_size, band], band=15
@@ -251,6 +280,13 @@ class MLFluvDataset(Dataset):
         mask = mask.astype("float")
         mask = torch.from_numpy(mask.copy()).long()
         # plot_pair(image, mask, "before_return")
+
+        # # --- TEMPORARY NaN CHECK ---
+        # if isinstance(image, np.ndarray) and np.isnan(image).any():
+        #     raise ValueError(f"NaN found in input data X before returning for index {index}")
+        # elif torch.is_tensor(image) and torch.isnan(image).any():
+        #     raise ValueError(f"NaN found in input tensor X before returning for index {index}")
+        # # ---------------------------
 
         return image, mask
     
