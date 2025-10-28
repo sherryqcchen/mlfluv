@@ -150,7 +150,7 @@ if __name__ == '__main__':
     ####################################
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
     parser.add_argument('--config_path',type=str, default=config_path, help='Path to a configuration yaml file.' )
-    parser.add_argument('--split_train_only',type=bool,default=False, help='True if only train data is splited into folds.' )
+    parser.add_argument('--split_train_only',type=bool,default=True, help='True if only train data is splited into folds.' )
 
     args = parser.parse_args()
     config_params = utils.load_config(args.config_path)
@@ -161,20 +161,20 @@ if __name__ == '__main__':
     with_extra_urban = config_params["incremental_learning"]['with_extra_urban']
 
     train_data_path = os.path.join(root_path, 
-                                   f'data/clean_data/mlfluv_s12lulc_data_water_from_{sample_mode}_{sample_length}')
+                                   f'data/extra_clean_data/mlfluv_s12lulc_data_clean_{sample_mode}') #_{sample_length}
     print("Processing train data.")
-    # train_label_list = get_s12label_list(WHICH_LABEL, train_data_path)
-    # split_n_folds(5, train_label_list, save_dir = os.path.join(root_path, 
-    #                                                            f'data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL))
+    train_label_list = get_s12label_list(WHICH_LABEL, train_data_path)
+    split_n_folds(5, train_label_list, save_dir = os.path.join(root_path, 
+                                                               f'data/fold_data/{sample_mode}_sampling_{WHICH_LABEL}_5_fold', which_label=WHICH_LABEL))
 
     if not args.split_train_only:
         # Getting the folder list for sediment and bare class seperation
         print('Processing sediment data.')
-        sediment_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/clean_data/mlfluv_incremental_data_sediment'))
+        sediment_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/extra_clean_data/mlfluv_s12lulc_data_clean_sediment'))
         print('Processing bare data.')
-        bare_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/clean_data/mlfluv_incremental_data_bare'))
+        bare_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/extra_clean_data/mlfluv_s12lulc_data_clean_bare'))
         print('Processing urban data.')
-        urban_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/clean_data/mlfluv_incremental_data_urban'))
+        urban_label_list = get_s12label_list(WHICH_LABEL, os.path.join(root_path, f'data/extra_clean_data/mlfluv_s12lulc_data_clean_urban'))
         # Concatenate lists into one list for incremental learning (fine tuning)
         if with_extra_urban:
             incremental_label_list = sediment_label_list + bare_label_list + urban_label_list
