@@ -29,7 +29,7 @@ except:
     # If you don't have Earth Engine Service Account Credentials, using following lines
     ee.Initialize()
 
-data_folder_path = "data/clean_data/mlfluv_s12lulc_data_water_from_STRATIFIED_6000"
+data_folder_path = "data/labelled_data_S2L1C/final_test_data"
 
 data_path_list = [os.path.join(data_folder_path, folder) for folder in os.listdir(data_folder_path) if os.path.isdir(os.path.join(data_folder_path, folder))]
 print(len(data_path_list), "folders found in", data_folder_path)
@@ -113,19 +113,6 @@ def download_sentinel2_image(data_folder_path):
     np.save(new_s2_file_path, s2_filled_data)
     print(f"Successfully downloaded and saved new S2 image to: {new_s2_file_path}")
 
-for folder_path in data_path_list:
-    # print(folder_path)
-    download_sentinel2_image(folder_path)
-
-# item_to_find = "data/clean_data/mlfluv_s12lulc_data_water_from_STRATIFIED_6000/20200907T151709_20200907T152155_T18MWE_61S7437W"
-
-# # find interrupt index if downloading is interrupted
-# try:
-#     index = data_path_list.index(item_to_find)
-#     print(f"The item's index is: {index}")
-# except ValueError:
-#     print(f"The item was not found in the list.")
-
 def check_folder_completeness(folder_path: str) -> bool:
     """
     Checks if a folder path contains the required files for a complete download.
@@ -174,11 +161,90 @@ def find_resume_index(paths: list, start_after_index: int) -> int:
     print("=" * 60)
     return len(paths) # Return list length if all are complete
 
+def restore_L1C(data_folder_path):
+    """
+    Reverses the Sentinel-2 swap by moving the L2A image to a 'level2A_backup' folder 
+    and restoring the L1C image from 'temp_backup' to the main folder.
+    """
+    print(f"\nREVERSING SWAP and organizing backups for folder: {data_folder_path}")
+    
+    # Define paths
+    L1C_source_folder = os.path.join(data_folder_path, 'temp_backup')
+    L2A_target_folder = os.path.join(data_folder_path, 'level2A_backup')
+    
+    # --- 1. Identify Files ---
+    
+    # The L2A image is currently in the main folder
+    l2a_pattern = os.path.join(data_folder_path, '*S2.npy')
+    l2a_file_list = glob.glob(l2a_pattern)
+    
+    # The L1C image is currently in the L1C_source_folder ('temp_backup')
+    l1c_pattern = os.path.join(L1C_source_folder, '*S2.npy')
+    l1c_file_list = glob.glob(l1c_pattern)
+    
+    if not l2a_file_list or not l1c_file_list:
+        print(f"---Skipping: Cannot find L2A in main folder or L1C in backup for {data_folder_path}.")
+        return
+
+    l2a_file_path = l2a_file_list[0] # Path of the current L2A file
+    l1c_file_path = l1c_file_list[0] # Path of the current L1C backup file
+    s2_file_name = os.path.basename(l2a_file_path) # e.g., T10TEK_S2.npy
+    
+    # --- 2. Move L2A to New Backup Folder ---
+    os.makedirs(L2A_target_folder, exist_ok=True)
+    l2a_backup_path = os.path.join(L2A_target_folder, s2_file_name)
+    
+    try:
+        # Move the current L2A image from the main folder to 'level2A_backup'
+        shutil.move(l2a_file_path, l2a_backup_path)
+        print(f"Moved L2A image to: {l2a_backup_path}")
+        
+    except Exception as e:
+        print(f"---Error moving L2A to backup for {data_folder_path}: {e}")
+        return # Stop if the L2A move fails
+
+    # --- 3. Restore L1C from Old Backup Folder ---
+    
+    # Move the original L1C image from 'temp_backup' back to the main folder
+    l1c_restore_path = os.path.join(data_folder_path, s2_file_name)
+    try:
+        shutil.move(l1c_file_path, l1c_restore_path)
+        print(f"Restored L1C image to main folder: {l1c_restore_path}")
+        
+        # Optional: Remove the now-empty 'temp_backup' folder if it's empty
+        try:
+            os.rmdir(L1C_source_folder)
+            print(f"Removed empty folder: {L1C_source_folder}")
+        except OSError:
+            # Folder might not be empty if other files were moved there
+            pass
+            
+        print(f"---Swap reversal and organization **COMPLETE** for {data_folder_path}.")
+        
+    except Exception as e:
+        print(f"---Error restoring L1C to main folder for {data_folder_path}: {e}")
+
+for folder_path in data_path_list:
+    print(folder_path)
+    restore_L1C(folder_path)
+    # download_sentinel2_image(folder_path)
+
+# item_to_find = "data/clean_data/mlfluv_s12lulc_data_water_from_STRATIFIED_6000/20200907T151709_20200907T152155_T18MWE_61S7437W"
+
+# # find interrupt index if downloading is interrupted
+# try:
+#     index = data_path_list.index(item_to_find)
+#     print(f"The item's index is: {index}")
+# except ValueError:
+#     print(f"The item was not found in the list.")
+
+
+
 # The 'folder_path' loop you mentioned can then be used to access items:
 # for folder_path in data_path_list:
 #     ...
 
-LAST_SUCCESSFUL_INDEX = 2396 
+# LAST_SUCCESSFUL_INDEX = 2396 
 
 # Find the index where the download should resume (the first incomplete folder)
 # resume_index = find_resume_index(data_path_list, LAST_SUCCESSFUL_INDEX)

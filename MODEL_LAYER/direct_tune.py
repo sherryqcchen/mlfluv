@@ -48,7 +48,9 @@ if __name__ == "__main__":
     config_params = load_config(config_path)
     
     sample_mode = config_params["sample"]["sample_mode"]
-    which_label = config_params["data_loader"]["which_label"]
+    data_loader_cfg = config_params["data_loader"]
+    which_label = data_loader_cfg["which_label"]
+    nan_handling = data_loader_cfg.get("nan_handling", "mask")
     log_num = config_params["trainer"]["log_num"]
     train_fold = config_params["trainer"]["train_fold"]
     valid_fold = config_params["trainer"]["valid_fold"]
@@ -105,7 +107,8 @@ if __name__ == "__main__":
         patch_size=patch_size,
         label='hand',
         folds=train_fold,
-        one_hot_encode=False      
+        one_hot_encode=False,
+        nan_handling=nan_handling      
     )
 
     val_set = MLFluvDataset(
@@ -115,7 +118,8 @@ if __name__ == "__main__":
         patch_size=patch_size,
         label='hand',
         folds=[0],
-        one_hot_encode=False      
+        one_hot_encode=False,
+        nan_handling=nan_handling      
     )
     
     # load pretrain model weights
@@ -192,7 +196,8 @@ if __name__ == "__main__":
             patch_size=patch_size,
             label='hand',
             folds=None,
-            one_hot_encode=False      
+            one_hot_encode=False,
+            nan_handling=nan_handling      
         )
     
         test_loader = DataLoader(test_set, batch_size=1, shuffle=False)  # TODO: workers

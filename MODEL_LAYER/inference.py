@@ -110,7 +110,9 @@ if __name__ == '__main__':
     batch_size = config_params["trainer"]["batch_size"]
     window_size = config_params["trainer"]["window_size"]
     patch_size = config_params["sample"]["patch_size"]
-    which_label = config_params['data_loader']['which_label']
+    data_loader_cfg = config_params['data_loader']
+    which_label = data_loader_cfg['which_label']
+    nan_handling = data_loader_cfg.get('nan_handling', 'mask')
 
     # LOGGING
 
@@ -133,14 +135,15 @@ if __name__ == '__main__':
                      ).to(device)
 
     test_set = MLFluvDataset(
-        data_path=os.path.join(root_path,f'data/fold_data/test_{which_label}_fold'),
+        data_path=os.path.join(root_path,f'data/fold_data/final_test_{which_label}_fold'),
         mode='test',
         label=which_label,
         window_size=window_size,
         patch_size=patch_size,
         folds = None,
         one_hot_encode=False,
-        bands=bands      
+        bands=bands,
+        nan_handling=nan_handling      
     )
     # print(test_set.num_classes)
 

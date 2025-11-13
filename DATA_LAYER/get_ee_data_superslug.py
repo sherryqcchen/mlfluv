@@ -194,6 +194,8 @@ def interpolator(data):
     """
     if np.all(np.isfinite(data)) is False:
         mask = np.where(np.isfinite(data))
+        if mask[0].size == 0:
+            return data
         interp = NearestNDInterpolator(np.transpose(mask), data[mask])
         data = interp(*np.indices(data.shape))
     return data

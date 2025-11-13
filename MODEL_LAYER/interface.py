@@ -158,6 +158,14 @@ class MLFluvUnetInterface():
 
             y_pred_softmax = nn.functional.softmax(y_pred, dim=1)
 
+            # --- DEBUG CHECK (TEMPORARY) ---
+            max_label = y_batch.max().item()
+            num_classes = self.model.num_classes # Assuming you store num_classes in the model/interface
+            if max_label >= num_classes:
+                print(f"!!! CRITICAL ERROR: Max label found ({max_label}) >= Num classes ({num_classes})")
+                raise ValueError("Invalid label index found in batch.")
+            # -------------------------------
+
             loss_ce = self.criterion(y_pred_softmax, y_batch)
 
             if self.old_model is not None:
