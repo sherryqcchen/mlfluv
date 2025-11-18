@@ -48,7 +48,9 @@ if __name__ == "__main__":
     print(bands)
     in_channels = len(bands) # config_params["trainer"]["in_channels"]
 
-    which_label = config_params["data_loader"]["which_label"]
+    data_loader_cfg = config_params["data_loader"]
+    which_label = data_loader_cfg["which_label"]
+    nan_handling = data_loader_cfg.get("nan_handling", "mask")
 
     log_num = config_params["trainer"]["log_num"]
     train_fold = config_params["trainer"]["train_fold"]
@@ -103,7 +105,8 @@ if __name__ == "__main__":
         patch_size=patch_size,
         label=which_label,
         one_hot_encode=False,
-        bands=bands
+        bands=bands,
+        nan_handling=nan_handling
     )
 
     val_set = MLFluvDataset(
@@ -114,7 +117,8 @@ if __name__ == "__main__":
         patch_size=patch_size,
         label=which_label,
         one_hot_encode=False,
-        bands=bands
+        bands=bands,
+        nan_handling=nan_handling
     )
 
     # Use saved weights for loss function, if the weights are pre-calculated 

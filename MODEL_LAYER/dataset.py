@@ -6,6 +6,16 @@ import rioxarray
 import os
 import random
 import matplotlib.pyplot as plt
+from pathlib import Path
+import sys
+
+# Ensure the script directory is on sys.path so UTILS can be imported reliably
+SCRIPT_ROOT = Path(__file__).resolve().parents[1]
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
+
+from UTILS import plotter
+from UTILS import interpolation
 
 def plot_pair(image, mask, surfix):
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
@@ -106,7 +116,13 @@ class MLFluvDataset(Dataset):
             folds = [0, 1, 2, 3],
             label = None,
             one_hot_encode = False,
-            bands = ['VV','VH','B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B11','B12']    #'B10',      
+            bands = ['VV','VH','B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B11','B12'],    # 'B10',
+            debug_nan=False,
+            nan_debug_dir='debug_plots/nan_masks',
+            nan_debug_limit=5,
+            nan_overlay_source='s2',
+            nan_overlay_pol='VV',
+            nan_handling='mask',
     ):
         """
         Pytorch Dataset class to load samples from the MLFLuv dataset for fluvial system semantic segmentation.
@@ -133,6 +149,19 @@ class MLFluvDataset(Dataset):
         self.norm = norm
         self.label = label
         self.one_hot_encode = one_hot_encode
+        self.debug_nan = debug_nan
+        self.nan_debug_dir = nan_debug_dir
+        self.nan_debug_limit = nan_debug_limit
+        self.nan_overlay_source = nan_overlay_source.lower()
+        self.nan_overlay_pol = nan_overlay_pol
+        if self.nan_overlay_source not in {'s1', 's2'}:
+            self.nan_overlay_source = 's2'
+        valid_nan_policies = {'mask', 'drop', 'interpolate'}
+        if nan_handling not in valid_nan_policies:
+            raise ValueError(f"nan_handling must be one of {valid_nan_policies}, got '{nan_handling}'")
+        self._nan_debug_count = 0
+        self._nan_skip_count = 0
+        self.nan_handling = nan_handling
 
         if self.one_hot_encode:
             self.label_values = [0, 1, 2, 3, 4, 5, 6]
@@ -178,13 +207,60 @@ class MLFluvDataset(Dataset):
 
         return image, mask
 
-    def __getitem__(self, index):
+    def _visualize_nan_patch(self, patch_s1, patch_s2, union_mask, index, metadata=None):
+        """
+        Save debug plots showing where NaNs exist within the current patch.
+        """
+        if not self.debug_nan:
+            return
+        if self._nan_debug_count >= self.nan_debug_limit:
+            return
+
+        os.makedirs(self.nan_debug_dir, exist_ok=True)
+        base_name = os.path.join(self.nan_debug_dir, f'idx_{index:05d}')
+
+        overlay_path = f'{base_name}_nan_overlay.png'
+        if self.nan_overlay_source == 's1':
+            plotter.plot_nan_overlay_s1(
+                patch_s1,
+                union_mask,
+                save_path=overlay_path,
+                title=f'NaN overlay on Sentinel-1 {self.nan_overlay_pol}',
+                polarization=self.nan_overlay_pol
+            )
+        else:
+            plotter.plot_nan_overlay(
+                patch_s2,
+                union_mask,
+                save_path=overlay_path,
+                title='NaN overlay on Sentinel-2 RGB'
+            )
+
+        if metadata:
+            info_path = f'{base_name}_paths.txt'
+            with open(info_path, 'w') as info_file:
+                for key, value in metadata.items():
+                    info_file.write(f'{key}: {value}\n')
+
+        self._nan_debug_count += 1
+
+    def _interpolate_patch(self, patch):
+        filled_patch = patch.copy()
+        for band in range(filled_patch.shape[2]):
+            band_data = filled_patch[:, :, band]
+            if np.all(np.isfinite(band_data)):
+                continue
+            interpolated = interpolation.interpolate_nd(band_data)
+            filled_patch[:, :, band] = interpolated
+        return filled_patch
+
+    def _load_sample(self, index):
 
         data_paths = self.data[index]
 
         # if the input data is changed, go to split_data.py to check the new orders of s1, s2 and labels
         s1_path = [path for path in data_paths if path.endswith('S1.npy')][0]
-        s2_path = [path for path in data_paths if path.endswith('S2.npy')][0]     
+        s2_path = [path for path in data_paths if path.endswith('S2.npy')][0]
 
         s1_arr = np.load(s1_path) # shape [h, w, band], band=2
         s2_arr = np.load(s2_path) # shape [h, w, band], band=12
@@ -193,102 +269,99 @@ class MLFluvDataset(Dataset):
             hand_mask = [path for path in data_paths if path.endswith('hand.tif')][0]
             hand_mask_arr = rioxarray.open_rasterio(hand_mask).data.squeeze()[:self.patch_size, :self.patch_size]
             mask = hand_mask_arr
+            label_path_used = hand_mask
         else:
             auto_mask = [path for path in data_paths if path.endswith(f'{self.label}.npy')][0]
-            auto_mask_arr = np.load(auto_mask).squeeze()[:self.patch_size, :self.patch_size]  
+            auto_mask_arr = np.load(auto_mask).squeeze()[:self.patch_size, :self.patch_size]
             mask = auto_mask_arr
+            label_path_used = auto_mask
 
             if self.mode == 'initial_train':
                 mask = np.where(mask == 6, 5, mask)
-        
+
         # Handle possible invalid data in Sentinel images, mask them in the labels
         s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
         s1_arr[~np.isfinite(s1_arr)] = np.nan
 
-        # Slice both S1 and S2 arrays to the required patch size first
-        # This ensures all subsequent operations only act on the patch data.
-
         patch_s1 = s1_arr[:self.patch_size, :self.patch_size, :]
         patch_s2 = s2_arr[:self.patch_size, :self.patch_size, :]
 
-        # Check if ANY NaN exists in the entire patch array (across all dimensions)
         if np.isnan(patch_s2).any() or np.isnan(patch_s1).any():
-            
-            # 2. Find NaNs in S1 and S2 across ALL channels (axis=2)
-            # The result of np.isnan is a (H, W, C) boolean array.
-            # np.any(..., axis=2) collapses this to a (H, W) boolean array.
-            
-            # Check if ANY of the S1 channels is NaN at that (row, col) pixel
-            mask_s1_nan = np.isnan(patch_s1).any(axis=2) 
-            
-            # Check if ANY of the S2 channels is NaN at that (row, col) pixel
+            mask_s1_nan = np.isnan(patch_s1).any(axis=2)
             mask_s2_nan = np.isnan(patch_s2).any(axis=2)
-            
-            # 3. Combine the masks: a pixel is invalid if either S1 or S2 is invalid there
             union_mask = np.logical_or(mask_s1_nan, mask_s2_nan)
 
-            # 4. Apply the union mask to your label/output mask (assuming 'mask' is a 2D array)
-            mask[union_mask] = 0
+            if self.debug_nan:
+                self._visualize_nan_patch(
+                    patch_s1.copy(),
+                    patch_s2.copy(),
+                    union_mask,
+                    index,
+                    metadata={
+                        's1_path': s1_path,
+                        's2_path': s2_path,
+                        'label_path': label_path_used
+                    }
+                )
+            if self.nan_handling == 'drop':
+                self._nan_skip_count += 1
+                if self.debug_nan:
+                    print(f"[MLFluvDataset] Skipping sample index {index} due to NaNs (total skipped: {self._nan_skip_count}).")
+                return None
+            elif self.nan_handling == 'interpolate':
+                patch_s1 = self._interpolate_patch(patch_s1)
+                patch_s2 = self._interpolate_patch(patch_s2)
+                if np.isnan(patch_s1).any() or np.isnan(patch_s2).any():
+                    # Fall back to masking if interpolation failed
+                    mask[union_mask] = 0
+                    patch_s1[union_mask] = 0
+                    patch_s2[union_mask] = 0
+            else:
+                mask[union_mask] = 0
+                patch_s1[union_mask] = 0
+                patch_s2[union_mask] = 0
 
-            # Apply the mask to S1 and S2 patches to set NaN pixels to 0
-            patch_s1[union_mask] = 0
-            patch_s2[union_mask] = 0
-
-        # mask no data label as clouds (the class that has not shown in the dataset yet)
         mask = np.where((mask >= 0) & (mask <= 6), mask, 0)
-        # auto labels do not have sediment class (6), therefore the num_class = 6
         self.num_classes = 6
 
         if self.label == 'hand':
             self.num_classes = 7
 
-        # Train on S1 2 bands and S2 13 bands
-        # clip each image to self.patch_size*self.patch_size as height * width
-
         full_image = np.dstack((patch_s1, patch_s2))[:self.patch_size, :self.patch_size, :]  # shape [h, w, band], band=15
 
-        # --- TEMPORARY NaN CHECK ---
         if isinstance(full_image, np.ndarray) and np.isnan(full_image).any():
             raise ValueError(f"NaN found in input tensor image before returning for index {index}")
-        # ---------------------------
 
-        # Get indices of selected bands
         selected_indices = self.get_band_indices()
-
-        # Extract selected bands
-        image = full_image[:, :, selected_indices] 
+        image = full_image[:, :, selected_indices]
         image = np.transpose(image, (2, 0, 1))  # shape [band, h, w], band=15
-
-        # plot_pair(image, mask, "before_transform")
-        
-        # Train only on Sen2 full bands 
-        # image = s2_image
 
         image, mask = self.transform(image, mask) # image shape [windows_size, window_size, band], band=15
 
-        # plot_pair(image, mask, "after_transform")
-
-        # one-hot-encode the mask
         if self.one_hot_encode:
             class_idx = [idx for idx in self.label_values]
             masks = [(mask == idx) for idx in class_idx]
             mask = np.stack(masks, axis = -1) # shape [h, w, band], band=8
 
-        # plot_pair(image, mask, "after_transpose")
-
         image = torch.from_numpy(image).float()
         mask = mask.astype("float")
         mask = torch.from_numpy(mask.copy()).long()
-        # plot_pair(image, mask, "before_return")
-
-        # # --- TEMPORARY NaN CHECK ---
-        # if isinstance(image, np.ndarray) and np.isnan(image).any():
-        #     raise ValueError(f"NaN found in input data X before returning for index {index}")
-        # elif torch.is_tensor(image) and torch.isnan(image).any():
-        #     raise ValueError(f"NaN found in input tensor X before returning for index {index}")
-        # # ---------------------------
 
         return image, mask
+
+    def __getitem__(self, index):
+
+        data_len = len(self.data)
+        attempts = 0
+
+        while attempts < data_len:
+            actual_index = (index + attempts) % data_len
+            sample = self._load_sample(actual_index)
+            if sample is not None:
+                return sample
+            attempts += 1
+
+        raise RuntimeError("Unable to fetch a valid sample without NaNs after checking the entire dataset.")
     
     def __len__(self):
 
@@ -297,15 +370,27 @@ class MLFluvDataset(Dataset):
 
 if __name__ == '__main__':
 
-    my_dataset = MLFluvDataset(data_path='', 
-                               folds=[0], 
-                               mode='train',
-                               label='ESRI',
-                               bands = ['B2', 'B3', 'B4', 'B8'])
-    print(len(my_dataset.data[0]))
-    # print(my_dataset.data[0])
+    # my_dataset = MLFluvDataset(data_path='', 
+    #                            folds=[0], 
+    #                            mode='train',
+    #                            label='DW',
+    #                            bands = ['B2', 'B3', 'B4', 'B8'])
+    # print(len(my_dataset.data[0]))
+    # # print(my_dataset.data[0])
 
-    for idx, (image, label) in enumerate(my_dataset):
-        print(idx)
-        print(image.shape)
-        print(np.unique(label))
+    # for idx, (image, label) in enumerate(my_dataset):
+    #     print(idx)
+    #     print(image.shape)
+    #     print(np.unique(label))
+
+    dataset = MLFluvDataset(
+        data_path='data/fold_data/finetune_DW_5_fold',
+        folds=[0, 1, 2, 3, 4],
+        label='DW',
+        mode='train',
+        debug_nan=True,
+        nan_debug_limit=5
+    )
+
+    for idx in range(min(50, len(dataset))):
+        _ = dataset[idx]

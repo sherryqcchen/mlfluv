@@ -108,7 +108,9 @@ if __name__ == "__main__":
     window_size = config_params["trainer"]["window_size"]
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
-    which_label = config_params['data_loader']['which_label']
+    data_loader_cfg = config_params['data_loader']
+    which_label = data_loader_cfg['which_label']
+    nan_handling = data_loader_cfg.get('nan_handling', 'mask')
 
     # fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'{sample_mode}_sampling_{which_label}_5_fold')
     # fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_with_urban_{which_label}_5_fold')
@@ -122,9 +124,10 @@ if __name__ == "__main__":
         data_path = fold_data_path,
         mode = 'test', # Use val here because we don't want any cropped data for calculating weights
         folds = [0],
-        window = window_size,
+        window_size = window_size,
         label = 'hand',# which_label,
-        one_hot_encode = False)
+        one_hot_encode = False,
+        nan_handling=nan_handling)
 
     if os.path.isfile(weights_path):
         class_weights = list(csv.reader(open(weights_path, "r"), delimiter=","))
@@ -132,4 +135,3 @@ if __name__ == "__main__":
     else:
         class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=f'{which_label}_incre')
     print(class_weights)
-

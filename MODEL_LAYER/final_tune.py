@@ -19,7 +19,7 @@ import segmentation_models_pytorch as smp
 from torchmetrics import JaccardIndex
 
 from model import SMPUnet
-from dataset import MLFluvDataset
+from dataset_15channels import MLFluvDataset
 from interface import MLFluvUnetInterface
 from weight_calculator import get_class_weight
 from inference import infer_with_patches
@@ -31,7 +31,7 @@ from UTILS.plotter import plot_inference_result
 if __name__ == "__main__":
 
     root_path = ''
-    root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+    # root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
 
     final_tune_path = 'script/experiments/2003/fine_tune_34'
     config_path = os.path.join(final_tune_path, 'config.yml')
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     ACTIVATION = None
 
     exp_folder = os.path.join(root_path, f'script/experiments/final_tune')
-    output_folder = os.path.join(root_path, f'script/experiments/final_tune/{log_num}/{tune_mode}')
+    output_folder = os.path.join(root_path, f'script/experiments/final_tune/{log_num}/{tune_mode}_L1C')
     os.makedirs(output_folder, exist_ok=True)
 
     SHOW_PLOTS = False

@@ -194,6 +194,8 @@ def interpolator(data):
     """
     if np.all(np.isfinite(data)) is False:
         mask = np.where(np.isfinite(data))
+        if mask[0].size == 0:
+            return data
         interp = NearestNDInterpolator(np.transpose(mask), data[mask])
         data = interp(*np.indices(data.shape))
     return data
@@ -229,12 +231,12 @@ def download_1_point_data(coords, river_order,
 
     col_filter = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(start_date, end_date))
 
-    col_filter_for_sentinel = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(ee.Date.fromYMD(year,8, 1), ee.Date.fromYMD(year,9, 1)))
+    col_filter_for_sentinel = ee.Filter.And(ee.Filter.bounds(aoi),ee.Filter.date(ee.Date.fromYMD(year,7, 1), ee.Date.fromYMD(year,8, 1)))
 
     # Filter image collection from Google Dynamic World dataset, sentinel-1, sentinel-2
     dw_col = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(col_filter_for_sentinel)
     s1_col = ee.ImageCollection('COPERNICUS/S1_GRD').filter(col_filter_for_sentinel)
-    s2_col = ee.ImageCollection('COPERNICUS/S2').filter(col_filter_for_sentinel)
+    s2_col = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED').filter(col_filter_for_sentinel)
     print(dw_col.size().getInfo())
 
     # DW is made on top of Sentinel-2, so they have the same system_index property and these two collections can be joined together 
@@ -344,7 +346,7 @@ def download_1_point_data(coords, river_order,
             glc10_arr, _ = convert_ee_image_to_np_arr(glc10_remap, 'remapped', aoi)
             dw_arr, _ = convert_ee_image_to_np_arr(dw_remap, 'remapped', aoi)
 
-                # Get accumulative rainfall from CHIRPS dataset
+            # Get accumulative rainfall from CHIRPS dataset
             rainfall = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY')\
                                 .select('precipitation')\
                                 .filter(ee.Filter.Or(
@@ -411,10 +413,10 @@ def download_1_point_data(coords, river_order,
 
             np.save(os.path.join(point_path, point_id+'_S1.npy'), s1_filled_data)
             np.save(os.path.join(point_path, point_id+'_S2.npy'), s2_filled_data)
-            np.save(os.path.join(point_path, point_id+'_ESRI.npy'), esri_arr)
-            np.save(os.path.join(point_path, point_id+'_ESAWC.npy'), esawc_arr)
+            # np.save(os.path.join(point_path, point_id+'_ESRI.npy'), esri_arr)
+            # np.save(os.path.join(point_path, point_id+'_ESAWC.npy'), esawc_arr)
             np.save(os.path.join(point_path, point_id+'_DW.npy'), dw_arr)
-            np.save(os.path.join(point_path, point_id+'_GLC10.npy'), glc10_arr)
+            # np.save(os.path.join(point_path, point_id+'_GLC10.npy'), glc10_arr)
 
         else:
             print('S1 or S2 has missing bands, skip this point.')
@@ -436,9 +438,9 @@ if __name__ == "__main__":
     S1_BANDS = config['sample']['s1_bands']
     S2_BANDS = config['sample']['s2_bands']
 
-    YEAR = config['sample']['year']
+    YEAR = 2021 # config['sample']['year']
 
-    SAMPLE_MODE = 'bare'#config['sample']['sample_mode']
+    SAMPLE_MODE = 'compare' # config['sample']['sample_mode'] # 'bare' 
     SAMPLE_LENGTH = config['sample']['sample_length']
 
     PATCH_SIZE = config['sample']['patch_size']
@@ -466,8 +468,8 @@ if __name__ == "__main__":
                 coord = tuple([float(row['x']), float(row['y'])])
             except:
                 coord = tuple(float(x.strip('\'"')) for x in row['coordinates'].strip('()').split(','))
-            riv_order = int(float(row['riv_order']))
-            da = float(row['upland_drainage_area'])
+            riv_order = 'NA' # int(float(row['riv_order']))
+            da = 'NA' # float(row['upland_drainage_area'])
             point_list.append((coord,riv_order, da))
 
     # print(point_list)

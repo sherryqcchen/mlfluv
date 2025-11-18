@@ -1,14 +1,63 @@
 import os
+from pathlib import Path
+from datetime import datetime
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 from matplotlib.colors import ListedColormap
 import matplotlib.patches as mpatches
 
+DEFAULT_DEBUG_DIR = Path('debug_plots/figures')
 
-def plot_lulc(data, title='LULC Class Map'):
+
+def _normalize_to_uint8(arr):
+    arr = np.asarray(arr, dtype=np.float32)
+    finite_mask = np.isfinite(arr)
+    if not finite_mask.any():
+        return np.zeros_like(arr, dtype=np.uint8)
+    min_val = np.nanmin(arr)
+    max_val = np.nanmax(arr)
+    if np.isclose(max_val, min_val):
+        return np.zeros_like(arr, dtype=np.uint8)
+    norm = (arr - min_val) / (max_val - min_val)
+    norm = np.clip(norm, 0, 1)
+    return (norm * 255).astype(np.uint8)
+
+
+def _cv2_normalize(arr):
+    if cv2 is not None:
+        return cv2.normalize(
+            arr,
+            dst=None,
+            alpha=0,
+            beta=255,
+            norm_type=cv2.NORM_MINMAX
+        ).astype(np.uint8)
+    return _normalize_to_uint8(arr)
+
+
+def _finalize_plot(fig, save_path=None, prefix='fig'):
+    """
+    Save or display the current matplotlib figure depending on save_path.
+    """
+    if not save_path:
+        DEFAULT_DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        save_path = DEFAULT_DEBUG_DIR / f'{prefix}_{timestamp}.png'
+    else:
+        directory = os.path.dirname(save_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+    fig.savefig(save_path, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_lulc(data, title='LULC Class Map', save_path=None):
     """
     Plot a LULC map with merged and edited classes for MLFluv dataset.
     It assumes maps has 8 classes with values varing from 0 - 7 
@@ -20,37 +69,38 @@ def plot_lulc(data, title='LULC Class Map'):
 
     lulc_cmap = mpl.colors.ListedColormap(['#6BF5FF', '#009600', '#CCFF99', '#4183C4', '#FA0000','#B4B4B4', '#FFBB22'])
 
-    plt.imshow(data, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
+    fig, ax = plt.subplots()
+    im = ax.imshow(data, cmap=lulc_cmap, interpolation='none', vmin=0, vmax=6)
 
     # Add color bar for reference
-    cbar = plt.colorbar(ticks=np.arange(0, 8))
+    cbar = fig.colorbar(im, ax=ax, ticks=np.arange(0, 8))
     class_names = ['background', 'tree', 'shallow-rooted vegetation','water', 'build-up', 'bare', 'fluvial sediment']
     cbar.set_label('Class')
     cbar.set_ticklabels(class_names)
 
     # Set the plot title
-    plt.title(title)
+    ax.set_title(title)
+    ax.axis('off')
 
-    plt.show()
+    _finalize_plot(fig, save_path, prefix='lulc')
 
-def plot_s2_rgb(s2_array):
+def plot_s2_rgb(s2_array, save_path=None, title='Sentinel-2 RGB stack'):
     """
-    Plot Sentinel-2 RGB bands. 
+    Plot Sentinel-2 RGB bands.
 
     Args:
         s2_arr (numoy.ndarray):3D array representing the Sentinel-2 image, where the third dimension
          corresponds to different spectral bands (e.g., bands 4, 3, 2 (index position 3, 2, 1) for RGB)                       
     """    
-    rgb_img = s2_array[:, :, [3,2,1]]
-    rgb_arr = cv2.normalize(rgb_img,
-                            dst=None,
-                            alpha=0,
-                            beta=255,
-                            norm_type=cv2.NORM_MINMAX).astype(np.uint8)
-    plt.imshow(rgb_arr)
-    plt.show()
+    rgb_img = s2_array[:, :, [3, 2, 1]]
+    rgb_arr = _cv2_normalize(rgb_img)
+    fig, ax = plt.subplots()
+    ax.imshow(rgb_arr)
+    ax.set_title(title)
+    ax.axis('off')
+    _finalize_plot(fig, save_path, prefix='s2_rgb')
 
-def plot_s1(s1_array, vis_option='VV'):
+def plot_s1(s1_array, vis_option='VV', save_path=None, title=None):
     """
     Plot Sentinel-1 polarizations.
 
@@ -65,40 +115,66 @@ def plot_s1(s1_array, vis_option='VV'):
     vv = s1_array[:, :, 0]
     vh = s1_array[:, :, 1]
 
-    if vis_option=='VV':
-        plt.imshow(vv)
-    elif vis_option=='VH':
-        plt.imshow(vh)
+    fig, ax = plt.subplots()
+    if vis_option == 'VV':
+        ax.imshow(vv)
+    elif vis_option == 'VH':
+        ax.imshow(vh)
     else:
-        # add ratio band for visualization
         ratio = vv / vh
-
         s1_stack = np.stack([vv, vh, ratio], axis=-1)
+        rgb_arr = _cv2_normalize(s1_stack)
+        ax.imshow(rgb_arr)
+    default_title = f'Sentinel-1 {vis_option.upper()} polarization' if vis_option in ['VV', 'VH'] else 'Sentinel-1 composite'
+    ax.set_title(title or default_title)
+    ax.axis('off')
+    _finalize_plot(fig, save_path, prefix=f's1_{vis_option}')
 
-        # # Normalize the valuse of three bands
-        # s1_stack_reshaped = s1_stack.reshape(-1, 3) 
-        # s1_stack_normalized = normalize(s1_stack_reshaped, axis=0).reshape(s1_stack.shape)
 
-        rgb_arr = cv2.normalize(s1_stack,
-                                dst=None,
-                                alpha=0,
-                                beta=255,
-                                norm_type=cv2.NORM_MINMAX).astype(np.uint8)
-        plt.imshow(rgb_arr)
-    plt.show()
+def plot_nan_mask(nan_mask, save_path=None, title='NaN mask'):
+    """
+    Visualize a binary mask showing where NaNs were detected.
+    """
+    fig, ax = plt.subplots()
+    cmap = ListedColormap(['black', '#ff8800'])
+    ax.imshow(nan_mask.astype(int), cmap=cmap, interpolation='nearest')
+    ax.set_title(title)
+    ax.axis('off')
+    _finalize_plot(fig, save_path, prefix='nan_mask')
+
+
+def plot_nan_overlay(s2_array, nan_mask, save_path=None, title='NaNs over Sentinel-2 RGB'):
+    """
+    Overlay the NaN mask on top of an RGB Sentinel-2 visualization.
+    """
+    rgb_img = _cv2_normalize(s2_array[:, :, [3, 2, 1]])
+    fig, ax = plt.subplots()
+    ax.imshow(rgb_img)
+    masked = np.ma.masked_where(~nan_mask, nan_mask)
+    ax.imshow(masked, cmap='autumn', alpha=0.5, interpolation='nearest')
+    ax.set_title(title)
+    ax.axis('off')
+    _finalize_plot(fig, save_path, prefix='nan_overlay')
+
+
+def plot_nan_overlay_s1(s1_array, nan_mask, save_path=None, title='NaNs over Sentinel-1 VV', polarization='VV'):
+    """
+    Overlay the NaN mask on top of a Sentinel-1 polarization image.
+    """
+    pol_index = 0 if polarization.upper() == 'VV' else 1
+    pol_img = s1_array[:, :, pol_index]
+    fig, ax = plt.subplots()
+    ax.imshow(pol_img, cmap='gray')
+    masked = np.ma.masked_where(~nan_mask, nan_mask)
+    ax.imshow(masked, cmap='autumn', alpha=0.5, interpolation='nearest')
+    ax.set_title(title)
+    ax.axis('off')
+    _finalize_plot(fig, save_path, prefix='nan_overlay_s1')
 
 def plot_s12label(s1_array, s2_array, label_array, meta_info, savefig=False, fig_name=None, which_label='ESRI', s2_vis_false=True):
 
-    s2_rgb = cv2.normalize(s2_array[:, :, [3,2,1]],
-                    dst=None,
-                    alpha=0,
-                    beta=255,
-                    norm_type=cv2.NORM_MINMAX).astype(np.uint8)
-    s2_false_color = cv2.normalize(s2_array[:, :, [7, 3, 2]],
-                               dst=None,
-                               alpha=0,
-                               beta=255,
-                               norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+    s2_rgb = _cv2_normalize(s2_array[:, :, [3,2,1]])
+    s2_false_color = _cv2_normalize(s2_array[:, :, [7, 3, 2]])
     s1 = s1_array[:,:,0]
     
     if s2_vis_false:
@@ -164,16 +240,8 @@ def plot_full_data(s1_array, s2_array, esri_array, esawc_array, dw_array, glc10_
         savefig (bool, optional): Whether save the plot. Defaults to False.
         fig_name (str, optional): svaed figure name. Defaults to None.
     """    
-    s2_rgb = cv2.normalize(s2_array[:, :, [3,2,1]],
-                        dst=None,
-                        alpha=0,
-                        beta=255,
-                        norm_type=cv2.NORM_MINMAX).astype(np.uint8)
-    s2_false_color = cv2.normalize(s2_array[:, :, [7, 3, 2]],
-                               dst=None,
-                               alpha=0,
-                               beta=255,
-                               norm_type=cv2.NORM_MINMAX).astype(np.uint8)
+    s2_rgb = _cv2_normalize(s2_array[:, :, [3,2,1]])
+    s2_false_color = _cv2_normalize(s2_array[:, :, [7, 3, 2]])
     if s2_vis_false:
         s2 = s2_false_color
     else:
