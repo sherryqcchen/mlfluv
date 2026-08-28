@@ -166,7 +166,7 @@ class MLFluvUnetInterface():
                 raise ValueError("Invalid label index found in batch.")
             # -------------------------------
 
-            loss_ce = self.criterion(y_pred_softmax, y_batch)
+            loss_ce = self.criterion(y_pred, y_batch)
 
             if self.old_model is not None:
                 # Distillation loss
@@ -248,7 +248,7 @@ class MLFluvUnetInterface():
                 y_val_pred = self.model(X_batch)
                 y_val_pred_softmax = nn.functional.softmax(y_val_pred, dim=1)
 
-                loss_ce = self.criterion(y_val_pred_softmax, y_batch)
+                loss_ce = self.criterion(y_val_pred, y_batch)
 
                 if self.old_model is not None:
                     # Distillation loss
