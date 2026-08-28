@@ -1,27 +1,82 @@
 import torch
 import segmentation_models_pytorch as smp
 
-class SMPUnet(torch.nn.Module):
-    def __init__(self, encoder_name="resnet34", in_channels=15, num_classes=7, num_valid_classes=6, encoder_freeze=False, temperature=1.0):
+class SMPSegmentationModel(torch.nn.Module):
+    def __init__(
+            self,
+            architecture="Unet",
+            encoder_name="resnet34",
+            encoder_weights="imagenet",
+            in_channels=15,
+            num_classes=7,
+            num_valid_classes=6,
+            encoder_freeze=False,
+            temperature=1.0,
+            decoder_attention_type="scse",
+            encoder_depth=5,
+            encoder_output_stride=16,
+            decoder_channels=256,
+            decoder_atrous_rates=(12, 24, 36),
+            decoder_aspp_separable=True,
+            decoder_aspp_dropout=0.5,
+            decoder_segmentation_channels=256,
+            upsampling=4,
+            aux_params=None,
+    ):
         """
-        Initialize the U-Net model using SMP unet model.
+        Initialize a segmentation model from segmentation_models_pytorch.
 
         Args:
+            architecture (str): SMP architecture name. Supported here: "Unet", "DeepLabV3Plus", "Segformer".
             encoder_name (str): Name of the encoder backbone (e.g., "resnet34", "mobilenet_v2").
             in_channels (int): Number of input channels (3 for RGB images).
             num_classes (int): Number of output classes (usually 1 for binary segmentation).
             encoder_freeze (bool): Whether to freeze the encoder layers during training.
         """
-        super(SMPUnet, self).__init__()
-            
-        self.model = smp.Unet(
-            encoder_name=encoder_name,
-            encoder_weights="imagenet",  # Use pre-trained weights
-            decoder_attention_type='scse',
-            in_channels=in_channels,
-            classes=num_classes,
-            activation=None
-        )
+        super(SMPSegmentationModel, self).__init__()
+
+        architecture_key = architecture.lower()
+        if architecture_key == "unet":
+            self.model = smp.Unet(
+                encoder_name=encoder_name,
+                encoder_depth=encoder_depth,
+                encoder_weights=encoder_weights,
+                decoder_attention_type=decoder_attention_type,
+                in_channels=in_channels,
+                classes=num_classes,
+                activation=None,
+                aux_params=aux_params,
+            )
+        elif architecture_key in {"deeplabv3plus", "deeplabv3+"}:
+            self.model = smp.DeepLabV3Plus(
+                encoder_name=encoder_name,
+                encoder_depth=encoder_depth,
+                encoder_weights=encoder_weights,
+                encoder_output_stride=encoder_output_stride,
+                decoder_channels=decoder_channels,
+                decoder_atrous_rates=decoder_atrous_rates,
+                decoder_aspp_separable=decoder_aspp_separable,
+                decoder_aspp_dropout=decoder_aspp_dropout,
+                in_channels=in_channels,
+                classes=num_classes,
+                activation=None,
+                upsampling=upsampling,
+                aux_params=aux_params,
+            )
+        elif architecture_key == "segformer":
+            self.model = smp.Segformer(
+                encoder_name=encoder_name,
+                encoder_depth=encoder_depth,
+                encoder_weights=encoder_weights,
+                decoder_segmentation_channels=decoder_segmentation_channels,
+                in_channels=in_channels,
+                classes=num_classes,
+                activation=None,
+                upsampling=upsampling,
+                aux_params=aux_params,
+            )
+        else:
+            raise ValueError(f"Unsupported SMP architecture: {architecture}")
 
         self.num_valid_classes = num_valid_classes
         self.num_classes = num_classes
@@ -80,6 +135,21 @@ class SMPUnet(torch.nn.Module):
         logits = self.apply_mask(logits, self.num_valid_classes)
         
         return logits
+
+
+class SMPUnet(SMPSegmentationModel):
+    def __init__(self, encoder_name="resnet34", in_channels=15, num_classes=7, num_valid_classes=6, encoder_freeze=False, temperature=1.0):
+        super().__init__(
+            architecture="Unet",
+            encoder_name=encoder_name,
+            encoder_weights="imagenet",
+            decoder_attention_type="scse",
+            in_channels=in_channels,
+            num_classes=num_classes,
+            num_valid_classes=num_valid_classes,
+            encoder_freeze=encoder_freeze,
+            temperature=temperature,
+        )
 
 
 """

@@ -1,0 +1,103 @@
+data_loader:
+  name: MLFluvDataset
+  test_paths: /users/qchen7/mlfluv/data/labelled_data/test_dataset
+  train_paths: /users/qchen7/mlfluv/data/fold_data
+  which_label: DW
+  nan_handling: mask
+  s2_source: l1c_backup
+  random_seed: 666
+  fold_output_suffix: seed_666_l1c_backup
+  initial_train_data_path: data/clean_data/mlfluv_s12lulc_data_water_from_STRATIFIED_6000
+  update_labels_on_split: false
+data_preprocess:
+  convert_to_tif: false
+  fluv_point_only: true
+  handle_nan_in_sentinel: false
+  move_data: true
+  remap_to_sedi: false
+ee_api_key: script/sen12flood-qiuyangchen-8fdb42008616.json
+ee_service_account: earthi-ubuntu@sen12flood-qiuyangchen.iam.gserviceaccount.com
+incremental_learning:
+  distill_lamda: 0
+  freeze_encoder: false
+  temperature: 1
+  tune_log_num: 0
+  with_extra_urban: true
+model:
+  architecture: DeepLabV3Plus
+  encoder: resnet34
+  encoder_weights: imagenet
+  encoder_depth: 5
+  encoder_output_stride: 8
+  decoder_channels: 256
+  decoder_atrous_rates:
+  - 12
+  - 24
+  - 36
+  decoder_aspp_separable: true
+  decoder_aspp_dropout: 0.5
+  upsampling: 4
+  aux_params:
+  loss_function: CrossEntropyLoss
+  weights: inverse_count
+  class_weights:
+  - 0.0
+  - 0.29772705911008834
+  - 1.2682294216549383
+  - 0.7089202699655648
+  - 37.63245118436619
+  - 7.552994465974709
+plot_setting:
+  plot_data: true
+sample:
+  patch_size: 512
+  s1_bands:
+  - VV
+  - VH
+  s2_bands:
+  - B1
+  - B2
+  - B3
+  - B4
+  - B5
+  - B6
+  - B7
+  - B8
+  - B8A
+  - B9
+  - B10
+  - B11
+  - B12
+  sample_length: 6000
+  sample_mode: STRATIFIED
+  year: 2020
+trainer:
+  batch_size: 64
+  classes: 6
+  device: cuda
+  epochs: 50
+  eval_interval: 5
+  exp_folder: /users/qchen7/mlfluv/script/mlfluv/experiments
+  in_channels: 15
+  learning_rate: 0.0001
+  log_num: 9006
+  mode: train
+  num_workers: 6
+  scheduler:
+    name: ReduceLROnPlateau
+    monitor: val_miou
+    mode: max
+    factor: 0.5
+    patience: 1
+    threshold: 0.001
+    threshold_mode: abs
+    cooldown: 0
+    min_lr: 0.000001
+  train_fold:
+  - 0
+  - 1
+  - 2
+  - 3
+  valid_fold:
+  - 4
+  window_size: 512

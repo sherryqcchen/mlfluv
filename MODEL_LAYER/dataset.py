@@ -15,7 +15,10 @@ if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
 from UTILS import plotter
-from UTILS import interpolation
+try:
+    from UTILS import interpolation
+except ImportError:
+    interpolation = None
 
 def plot_pair(image, mask, surfix):
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
@@ -116,13 +119,15 @@ class MLFluvDataset(Dataset):
             folds = [0, 1, 2, 3],
             label = None,
             one_hot_encode = False,
-            bands = ['VV','VH','B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B11','B12'],    # 'B10',
+            bands = ['VV','VH','B1','B2','B3','B4','B5','B6','B7','B8','B8A','B9','B10','B11','B12'],
             debug_nan=False,
             nan_debug_dir='debug_plots/nan_masks',
             nan_debug_limit=5,
-            nan_overlay_source='s2',
+            nan_overlay_source='s2_false_color',
             nan_overlay_pol='VV',
             nan_handling='mask',
+            s2_source='main',
+            data_root=None,
     ):
         """
         Pytorch Dataset class to load samples from the MLFLuv dataset for fluvial system semantic segmentation.
@@ -132,6 +137,7 @@ class MLFluvDataset(Dataset):
         # print(os.listdir(data_path))
         self.file_paths = [os.path.join(data_path, file) for file in os.listdir(data_path)] # 5 npy files
         self.all_folds = [np.load(file, allow_pickle=True) for file in self.file_paths if file.endswith('.npy')] # len() is 5 because of 5 folds split
+        self.data_root = Path(data_root).resolve() if data_root else self._infer_data_root(data_path)
 
         if folds == None:
             # If folds are not specified, all data will be loaded
@@ -140,8 +146,8 @@ class MLFluvDataset(Dataset):
             self.data = np.concatenate([self.all_folds[idx] for idx in folds], axis=0)
 
         self.s1_bands = ['VV', 'VH']
-        self.s2_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B11', 'B12'] # 'B10'
-        self.all_bands = self.s1_bands + self.s2_bands  # Full list of 15 bands
+        self.s2_bands = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B10', 'B11', 'B12']
+        self.all_bands = self.s1_bands + self.s2_bands
         self.bands = bands
         self.window_size = window_size
         self.patch_size = patch_size
@@ -154,17 +160,31 @@ class MLFluvDataset(Dataset):
         self.nan_debug_limit = nan_debug_limit
         self.nan_overlay_source = nan_overlay_source.lower()
         self.nan_overlay_pol = nan_overlay_pol
-        if self.nan_overlay_source not in {'s1', 's2'}:
-            self.nan_overlay_source = 's2'
+        if self.nan_overlay_source not in {'s1', 's2', 's2_false_color'}:
+            self.nan_overlay_source = 's2_false_color'
         valid_nan_policies = {'mask', 'drop', 'interpolate'}
         if nan_handling not in valid_nan_policies:
             raise ValueError(f"nan_handling must be one of {valid_nan_policies}, got '{nan_handling}'")
         self._nan_debug_count = 0
         self._nan_skip_count = 0
         self.nan_handling = nan_handling
+        self.s2_source = s2_source
 
         if self.one_hot_encode:
             self.label_values = [0, 1, 2, 3, 4, 5, 6]
+
+    def _infer_data_root(self, data_path):
+        resolved_path = Path(data_path).resolve()
+        for path in [resolved_path, *resolved_path.parents]:
+            if path.name == "data":
+                return path.parent
+        return Path.cwd()
+
+    def _resolve_data_path(self, path):
+        path = Path(str(path))
+        if path.is_absolute():
+            return str(path)
+        return str(self.data_root / path)
     
     def get_band_indices(self):
         """
@@ -207,7 +227,7 @@ class MLFluvDataset(Dataset):
 
         return image, mask
 
-    def _visualize_nan_patch(self, patch_s1, patch_s2, union_mask, index, metadata=None):
+    def _visualize_nan_patch(self, patch_s1, patch_s2, union_mask, index, metadata=None, s2_l2a_nan_mask=None):
         """
         Save debug plots showing where NaNs exist within the current patch.
         """
@@ -228,12 +248,23 @@ class MLFluvDataset(Dataset):
                 title=f'NaN overlay on Sentinel-1 {self.nan_overlay_pol}',
                 polarization=self.nan_overlay_pol
             )
+        elif self.nan_overlay_source == 's2_false_color':
+            if s2_l2a_nan_mask is None or not s2_l2a_nan_mask.any():
+                return
+            plotter.plot_nan_overlay_s2_false_color(
+                patch_s2,
+                s2_l2a_nan_mask,
+                save_path=overlay_path,
+                title='L2A NaNs on Sentinel-2 false color'
+            )
         else:
+            if s2_l2a_nan_mask is None:
+                s2_l2a_nan_mask = union_mask
             plotter.plot_nan_overlay(
                 patch_s2,
-                union_mask,
+                s2_l2a_nan_mask,
                 save_path=overlay_path,
-                title='NaN overlay on Sentinel-2 RGB'
+                title='L2A NaNs on Sentinel-2 RGB'
             )
 
         if metadata:
@@ -245,6 +276,8 @@ class MLFluvDataset(Dataset):
         self._nan_debug_count += 1
 
     def _interpolate_patch(self, patch):
+        if interpolation is None:
+            raise ImportError("nan_handling='interpolate' requires UTILS/interpolation.py")
         filled_patch = patch.copy()
         for band in range(filled_patch.shape[2]):
             band_data = filled_patch[:, :, band]
@@ -256,11 +289,16 @@ class MLFluvDataset(Dataset):
 
     def _load_sample(self, index):
 
-        data_paths = self.data[index]
+        data_paths = [self._resolve_data_path(path) for path in self.data[index]]
 
         # if the input data is changed, go to split_data.py to check the new orders of s1, s2 and labels
         s1_path = [path for path in data_paths if path.endswith('S1.npy')][0]
         s2_path = [path for path in data_paths if path.endswith('S2.npy')][0]
+        if self.s2_source == 'l1c_backup':
+            s2_backup_path = os.path.join(os.path.dirname(s2_path), 'temp_backup', os.path.basename(s2_path))
+            if not os.path.isfile(s2_backup_path):
+                raise FileNotFoundError(f"Requested s2_source='l1c_backup' but missing {s2_backup_path}")
+            s2_path = s2_backup_path
 
         s1_arr = np.load(s1_path) # shape [h, w, band], band=2
         s2_arr = np.load(s2_path) # shape [h, w, band], band=12
@@ -278,6 +316,9 @@ class MLFluvDataset(Dataset):
 
             if self.mode == 'initial_train':
                 mask = np.where(mask == 6, 5, mask)
+
+        patch_s2_raw = s2_arr[:self.patch_size, :self.patch_size, :].copy()
+        mask_s2_l2a_nan = np.isnan(patch_s2_raw).any(axis=2)
 
         # Handle possible invalid data in Sentinel images, mask them in the labels
         s2_arr[(s2_arr<0) | (s2_arr>10000)] = np.nan
@@ -300,8 +341,11 @@ class MLFluvDataset(Dataset):
                     metadata={
                         's1_path': s1_path,
                         's2_path': s2_path,
-                        'label_path': label_path_used
-                    }
+                        'label_path': label_path_used,
+                        'nan_mask': 'Sentinel-2 L2A original NaN pixels only',
+                        'visualization': 'Sentinel-2 false color B8/B4/B3'
+                    },
+                    s2_l2a_nan_mask=mask_s2_l2a_nan
                 )
             if self.nan_handling == 'drop':
                 self._nan_skip_count += 1
@@ -389,7 +433,8 @@ if __name__ == '__main__':
         label='DW',
         mode='train',
         debug_nan=True,
-        nan_debug_limit=5
+        nan_debug_limit=5,
+        nan_overlay_source='s2_false_color'
     )
 
     for idx in range(min(50, len(dataset))):

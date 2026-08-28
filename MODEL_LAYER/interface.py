@@ -73,7 +73,8 @@ class MLFluvUnetInterface():
         old_model=None,
         best_model_path = None,
         run_config_path=None,
-        exp_folder=None
+        exp_folder=None,
+        scheduler_config=None
     ):
         self.device = device
         self.model = model.to(device)
@@ -105,7 +106,9 @@ class MLFluvUnetInterface():
 
         self.criterion = loss_fn
         self.optimiser = optimiser
-        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimiser, mode='min', factor=0.4, patience=2)
+        self.scheduler_config = scheduler_config or {}
+        self.scheduler_monitor = self.scheduler_config.get("monitor", "val_loss")
+        self.scheduler = self._build_scheduler(self.scheduler_config)
 
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -132,9 +135,6 @@ class MLFluvUnetInterface():
         self.best_val_epoch = 0
 
         if self.log_num is not None:
-            # LOGGING
-            logger.add(os.path.join(self.exp_folder, f'{self.log_num}/info.log'))
-
             os.makedirs(os.path.join(self.exp_folder, f'{log_num}'), exist_ok=True)
             os.makedirs(os.path.join(self.exp_folder, f'{log_num}/checkpoints'), exist_ok=True)
 
@@ -143,9 +143,32 @@ class MLFluvUnetInterface():
             shutil.copy(os.path.join(SCRIPT_ROOT, f'MODEL_LAYER/dataset.py'), os.path.join(os.path.join(self.exp_folder, f'{log_num}'), f'dataset.py'))
             shutil.copy(os.path.join(SCRIPT_ROOT, f'MODEL_LAYER/train.py'), os.path.join(os.path.join(self.exp_folder, f'{log_num}'), f'train.py'))
 
+    def _build_scheduler(self, scheduler_config):
+        scheduler_name = scheduler_config.get("name", "ReduceLROnPlateau")
+        if scheduler_name in {None, "none", "None"}:
+            return None
+        if scheduler_name != "ReduceLROnPlateau":
+            raise ValueError(f"Unsupported scheduler: {scheduler_name}")
+        return optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimiser,
+            mode=scheduler_config.get("mode", "min"),
+            factor=scheduler_config.get("factor", 0.4),
+            patience=scheduler_config.get("patience", 2),
+            threshold=scheduler_config.get("threshold", 0.0001),
+            threshold_mode=scheduler_config.get("threshold_mode", "rel"),
+            cooldown=scheduler_config.get("cooldown", 0),
+            min_lr=scheduler_config.get("min_lr", 0),
+        )
+
+    def _current_lr(self):
+        return [group["lr"] for group in self.optimiser.param_groups]
+
     @staticmethod
     def _accumulate_stats(total_stats, batch_stats):
-        batch_stats = tuple(stat.detach() for stat in batch_stats)
+        batch_stats = tuple(
+            stat.detach().sum(dim=0) if stat.detach().ndim > 1 else stat.detach()
+            for stat in batch_stats
+        )
         if total_stats is None:
             return batch_stats
         return tuple(total + batch for total, batch in zip(total_stats, batch_stats))
@@ -303,9 +326,6 @@ class MLFluvUnetInterface():
 
                 val_jaccard_index.update(y_val_pred_agx, y_batch)
 
-        self.scheduler.step(val_loss)
-        print("lr:", self.scheduler._last_lr)
-        
         self.losses_val.append(val_loss / len(self.data_val))
         self.writer.add_scalar('Loss/val', val_loss / len(self.data_val), epoch_idx)
 
@@ -321,6 +341,19 @@ class MLFluvUnetInterface():
         val_miou = sum(class_wise_iou_val) / len(class_wise_iou_val)
         val_metrics = self._compute_segmentation_metrics(val_stats)
 
+        scheduler_metrics = {
+            "val_loss": val_loss / len(self.data_val),
+            "val_miou": val_miou,
+            "val_micro_iou": val_metrics["micro_iou"].item(),
+            "val_macro_iou": val_metrics["macro_iou"].item(),
+            "val_f1": val_metrics["f1"].item(),
+        }
+        if self.scheduler is not None:
+            if self.scheduler_monitor not in scheduler_metrics:
+                raise ValueError(f"Unsupported scheduler monitor: {self.scheduler_monitor}")
+            self.scheduler.step(scheduler_metrics[self.scheduler_monitor])
+        print("lr:", self._current_lr())
+
         # if val_miou.item() >= best_val_miou:
         if val_miou >= self.best_val_miou:
             self.best_val_miou = val_miou
@@ -329,7 +362,7 @@ class MLFluvUnetInterface():
             logger.info(f'\n\nSaved new model at epoch {epoch_idx} at {self.best_model_path}!\n\n')
 
         logger.info(f"EPOCH: {epoch_idx} (validating)")
-        logger.info(f"Learning rate: {self.scheduler._last_lr}")
+        logger.info(f"Learning rate: {self._current_lr()}")
         logger.info(f"{'':<10}Loss{'':<5} ----> {val_loss / len(self.data_val):.3f}")
         logger.info(f"{'':<10}Mean IoU{'':<1} ----> {round(val_miou, 3)}")
         logger.info(f"{'':<10}Class-wise IoU{'':<1} ----> {class_wise_iou_val}")

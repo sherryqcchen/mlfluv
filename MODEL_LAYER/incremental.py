@@ -18,7 +18,7 @@ from loguru import logger
 import segmentation_models_pytorch as smp
 from torchmetrics import JaccardIndex
 
-from model import SMPUnet
+from model import SMPSegmentationModel
 from dataset import MLFluvDataset
 from interface import MLFluvUnetInterface
 from weight_calculator import get_class_weight
@@ -26,6 +26,8 @@ from inference import infer_with_patches
 from UTILS import utils
 from UTILS.utils import load_config
 from UTILS.plotter import plot_inference_result
+
+SCRIPT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
 if __name__ == "__main__":
@@ -66,7 +68,9 @@ if __name__ == "__main__":
     lr = config_params["trainer"]["learning_rate"]
     loss_func = config_params["model"]['loss_function']
     batch_size = config_params["trainer"]["batch_size"]
+    num_workers = config_params["trainer"].get("num_workers", 2)
     weight_func = config_params["model"]["weights"]
+    configured_class_weights = config_params["model"].get("class_weights")
     window_size = config_params["trainer"]["window_size"]
     patch_size = config_params["sample"]["patch_size"]
     with_extra_urban = config_params["incremental_learning"]['with_extra_urban']
@@ -76,32 +80,62 @@ if __name__ == "__main__":
     tune_mode = f'fine_tune_{config_params["incremental_learning"]["tune_log_num"]}'
     ENCODER = config_params['model']['encoder']
     ENCODER_WEIGHTS = config_params['model']['encoder_weights']
+    model_cfg = config_params['model']
+    ARCHITECTURE = model_cfg.get('architecture', 'Unet')
     ACTIVATION = None
 
-    exp_folder = os.path.join(root_path, f'script/experiments/{log_num}')
-    output_folder = os.path.join(root_path, f'script/experiments/{log_num}/{tune_mode}')
+    exp_base = config_params["trainer"].get("exp_folder", os.path.join(SCRIPT_ROOT, "experiments"))
+    if not os.path.isabs(exp_base):
+        exp_base = os.path.join(SCRIPT_ROOT, exp_base)
+    exp_folder = os.path.join(exp_base, f'{log_num}')
+    output_folder = os.path.join(exp_folder, tune_mode)
     os.makedirs(output_folder, exist_ok=True)
 
     SHOW_PLOTS = False
 
-    weights_path = os.path.join(root_path, f"script/MODEL_LAYER/{weight_func}_weights_{which_label}_incre.csv")
+    weights_path = os.path.join(SCRIPT_ROOT, f"MODEL_LAYER/{weight_func}_weights_{which_label}_incre.csv")
 
     print(f'Fine tune {tune_mode} for log {log_num}')
     print(f"{temperature = }")
     print(f"{distill_lamda = }")
+    device = torch.device(device if torch.cuda.is_available() else "cpu")
+    print(f"Using {device} device")
 
     # Logging
     logger.add(os.path.join(output_folder, 'info.log'))
 
     os.makedirs(os.path.join(output_folder, 'checkpoints'), exist_ok=True)
-    shutil.copy(os.path.join(root_path, f'script/MODEL_LAYER/incremental.py'), os.path.join(output_folder, 'incremental.py'))
+    shutil.copy(os.path.join(SCRIPT_ROOT, f'MODEL_LAYER/incremental.py'), os.path.join(output_folder, 'incremental.py'))
     shutil.copy(config_path, os.path.join(output_folder, 'config.yml'))
 
     # create an untrained model, with one extra class in num_classes
-    old_net = SMPUnet(encoder_name="resnet34", in_channels=in_channels, num_classes=classes, num_valid_classes=6, encoder_freeze=freeze_encoder, temperature=temperature)
+    old_net = SMPSegmentationModel(
+        architecture=ARCHITECTURE,
+        encoder_name=ENCODER,
+        encoder_weights=ENCODER_WEIGHTS,
+        in_channels=in_channels,
+        num_classes=classes,
+        num_valid_classes=6,
+        encoder_freeze=freeze_encoder,
+        temperature=temperature,
+        decoder_attention_type=model_cfg.get('decoder_attention_type', 'scse'),
+        encoder_depth=model_cfg.get('encoder_depth', 5),
+        encoder_output_stride=model_cfg.get('encoder_output_stride', 16),
+        decoder_channels=model_cfg.get('decoder_channels', 256),
+        decoder_atrous_rates=tuple(model_cfg.get('decoder_atrous_rates', (12, 24, 36))),
+        decoder_aspp_separable=model_cfg.get('decoder_aspp_separable', True),
+        decoder_aspp_dropout=model_cfg.get('decoder_aspp_dropout', 0.5),
+        decoder_segmentation_channels=model_cfg.get('decoder_segmentation_channels', 256),
+        upsampling=model_cfg.get('upsampling', 4),
+        aux_params=model_cfg.get('aux_params'),
+    )
     print(f"{old_net.temperature=}")
 
-    if with_extra_urban:
+    fold_data_path = config_params["data_loader"].get("finetune_fold_data_dir")
+    if fold_data_path is not None:
+        if not os.path.isabs(fold_data_path):
+            fold_data_path = os.path.join(SCRIPT_ROOT, fold_data_path)
+    elif with_extra_urban:
         fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_with_urban_bare_{which_label}_5_fold')
     else:
         fold_data_path = os.path.join(config_params['data_loader']['train_paths'], f'finetune_{which_label}_5_fold')
@@ -114,7 +148,8 @@ if __name__ == "__main__":
         folds=train_fold,
         one_hot_encode=False,
         bands=bands,
-        nan_handling=nan_handling     
+        nan_handling=nan_handling,
+        s2_source=config_params["data_loader"].get("s2_source", "main")
     )
 
     val_set = MLFluvDataset(
@@ -126,11 +161,13 @@ if __name__ == "__main__":
         folds=valid_fold,
         one_hot_encode=False,
         bands=bands,
-        nan_handling=nan_handling      
+        nan_handling=nan_handling,
+        s2_source=config_params["data_loader"].get("s2_source", "main")
     )
     
     # load pretrain model weights
-    checkpoint_path = os.path.join(exp_folder, 'checkpoints', os.listdir(os.path.join(exp_folder, 'checkpoints'))[0])
+    checkpoint_name = config_params["incremental_learning"].get("checkpoint_name", "best_model.pth")
+    checkpoint_path = os.path.join(exp_folder, 'checkpoints', checkpoint_name)
     old_net.load_state_dict(torch.load(checkpoint_path, map_location=device))
     old_net.eval()
     
@@ -140,7 +177,10 @@ if __name__ == "__main__":
     print(f"{new_net.temperature=}")
 
     # Use saved weights for loss function, if the weights are pre-calculated 
-    if os.path.isfile(weights_path):
+    if configured_class_weights is not None:
+        class_weights = configured_class_weights
+        print("Using class weights from config.")
+    elif os.path.isfile(weights_path):
         df = pd.read_csv(weights_path)
         class_weights = df['Weights']
     else:
@@ -176,6 +216,7 @@ if __name__ == "__main__":
         optimiser=optimiser,
         device=device,
         batch_size=batch_size,
+        num_workers=num_workers,
         log_num=log_num,
         mode=tune_mode,
         distill_lamda=distill_lamda,
@@ -196,7 +237,7 @@ if __name__ == "__main__":
         logger.add(os.path.join(output_folder,'preds.log'))
 
         test_set = MLFluvDataset(
-            data_path=os.path.join(root_path, f'data/fold_data/test_{which_label}_fold'),
+            data_path=config_params["data_loader"].get("test_fold_data_dir", os.path.join(config_params["data_loader"]["train_paths"], f'test_{which_label}_fold')),
             mode='test',
             label='hand',
             window_size=window_size,
@@ -204,7 +245,8 @@ if __name__ == "__main__":
             folds=None,
             one_hot_encode=False,
             bands=bands,
-            nan_handling=nan_handling      
+            nan_handling=nan_handling,
+            s2_source=config_params["data_loader"].get("s2_source", "main")
         )
     
         test_loader = DataLoader(test_set, batch_size=1, shuffle=False)  # TODO: workers

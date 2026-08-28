@@ -26,10 +26,13 @@ def _normalize_to_uint8(arr):
         return np.zeros_like(arr, dtype=np.uint8)
     norm = (arr - min_val) / (max_val - min_val)
     norm = np.clip(norm, 0, 1)
+    norm = np.where(finite_mask, norm, 0)
     return (norm * 255).astype(np.uint8)
 
 
 def _cv2_normalize(arr):
+    if not np.isfinite(arr).all():
+        return _normalize_to_uint8(arr)
     if cv2 is not None:
         return cv2.normalize(
             arr,
@@ -155,6 +158,23 @@ def plot_nan_overlay(s2_array, nan_mask, save_path=None, title='NaNs over Sentin
     ax.set_title(title)
     ax.axis('off')
     _finalize_plot(fig, save_path, prefix='nan_overlay')
+
+
+def plot_nan_overlay_s2_false_color(s2_array, nan_mask, save_path=None, title='NaNs over Sentinel-2 false color'):
+    """
+    Overlay the NaN mask on top of a Sentinel-2 false-color visualization.
+
+    False color uses B8, B4, B3, which are indices [7, 3, 2] in the
+    12-band Sentinel-2 L2A stack.
+    """
+    false_color = _cv2_normalize(s2_array[:, :, [7, 3, 2]])
+    fig, ax = plt.subplots()
+    ax.imshow(false_color)
+    masked = np.ma.masked_where(~nan_mask, nan_mask)
+    ax.imshow(masked, cmap='autumn', alpha=0.5, interpolation='nearest')
+    ax.set_title(title)
+    ax.axis('off')
+    _finalize_plot(fig, save_path, prefix='nan_overlay_s2_false_color')
 
 
 def plot_nan_overlay_s1(s1_array, nan_mask, save_path=None, title='NaNs over Sentinel-1 VV', polarization='VV'):
