@@ -14,6 +14,7 @@ from UTILS import utils
 
 root_path = ''
 root_path, is_vm = utils.update_root_path_for_machine(root_path=root_path)
+WEIGHT_OUTPUT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 if is_vm:
     config_path = os.path.join(root_path,'script/config.yml')
@@ -79,8 +80,9 @@ def get_class_weight(dataset, weight_func='inverse_log', suffix='auto'):
             new_row = pd.DataFrame({'Class': [0], 'Weights': [0]})
             df = pd.concat([df, new_row], ignore_index=True)
 
-        # Save to CSV
-        df.to_csv(os.path.join(root_path, f'script/MODEL_LAYER/{weight_func}_weights_{suffix}.csv'), index=False)
+        # Save alongside this module so parallel jobs do not depend on cwd.
+        os.makedirs(WEIGHT_OUTPUT_DIR, exist_ok=True)
+        df.to_csv(os.path.join(WEIGHT_OUTPUT_DIR, f'{weight_func}_weights_{suffix}.csv'), index=False)
 
         return df['Weights']
 

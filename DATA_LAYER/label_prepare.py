@@ -1,6 +1,8 @@
 # This scrip is used to examine and plot all data: S1, S2, ESRI label, ESA label, FROM-GL10 label and DW label.
 # The plots are examined to decide which label product is better suited to generate labels for fluvial system. 
-# ESRI is used for making the MLFluv labels. All the bareland class pixels are converted to fluvial sediment class. 
+# ESRI is used for making the MLFluv labels. For sediment sample preparation,
+# bare-labelled source pixels can be remapped to fluvial sediment. For bareland
+# sample preparation, original bare pixels must remain class 5.
 # Filter out all the ESRI labels that contains water pixels. We use these labels as the starting point to make hand labels.
 # Convert S1, S2 and ESRI label from npy files to tif files, so that they can be opened in QGIS. 
 # Fowllowing this script, download Planet images for the same aoi, create hand labels by fixing ESRI labels in QGIS (usnig Thrase plugin).
@@ -42,7 +44,23 @@ def get_bounding_box(coord_list):
     ymax = coords[:, 1].max() # maximum latitude
     return xmin, xmax, ymin, ymax
 
-def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, remap_to_sedi=False):
+def validate_bare_to_sediment_remap(sample_mode, remap_to_sedi):
+    sample_mode_normalized = str(sample_mode).strip().lower()
+    if remap_to_sedi and sample_mode_normalized in {"bare", "bareland"}:
+        raise ValueError(
+            "remap_to_sedi=True is invalid for bareland sample preparation. "
+            "Original Dynamic World bare pixels must remain class 5."
+        )
+
+
+def convert_npy_to_tiff(
+        npy_path,
+        which_data,
+        meta_info_path,
+        out_tiff_dir,
+        remap_to_sedi=False,
+        sample_mode=None,
+):
     """
     Convert numpy ndarray from .npy file to tiff for visualization and labelling.
 
@@ -110,8 +128,12 @@ def convert_npy_to_tiff(npy_path, which_data, meta_info_path, out_tiff_dir, rema
     else: # Labels
         # For all kinds or labels with dimensions [length, width, 1]
         
+        if sample_mode is not None:
+            validate_bare_to_sediment_remap(sample_mode, remap_to_sedi)
+
         if remap_to_sedi:
-            # remap bare class (5) to sediment class (6)
+            # Remap class-5 bare pixels to class-6 sediment only for sediment
+            # sample preparation. Bareland datasets must keep class 5 unchanged.
             label = np.where(arr==5, 6, arr)
         else:
             label = arr
@@ -160,7 +182,8 @@ if __name__=='__main__':
     MOVE_DATA = config['data_preprocess']['move_data']
 
     WHICH_LABEL = config['data_loader']['which_label']
-    SAMPLE_MODE = 'compare' # config['sample']['sample_mode'] 
+    SAMPLE_MODE = config['sample']['sample_mode']
+    validate_bare_to_sediment_remap(SAMPLE_MODE, REMAP_TO_SEDI)
 
     raw_data_path = os.path.join(root_path,f'data/full_data/')
     
@@ -206,7 +229,8 @@ if __name__=='__main__':
         s2_arr = np.load(s2_path)
 
         if REMAP_TO_SEDI:
-            # remap bare class (5) to sediment class (6)
+            # Remap class-5 bare pixels to class-6 sediment only for sediment
+            # sample preparation. Bareland datasets are rejected above.
             dw_arr = np.where(dw_arr==5, 6, dw_arr)
 
         # Create a mask for invalid data in S2 image, replace invalid data with NaNs
@@ -311,8 +335,16 @@ if __name__=='__main__':
             # Convert to TIFF
             convert_npy_to_tiff(s1_fluv_path, 's1', meta_path, dest_point_path)
             convert_npy_to_tiff(s2_fluv_path, 's2', meta_path, dest_point_path)
-            # remap_to_sedi=False here because the remapping was already done and saved to the .npy file above.
-            convert_npy_to_tiff(dw_label_path, 'label', meta_path, dest_point_path, remap_to_sedi=False)
+            # remap_to_sedi=False here because any permitted remapping was already
+            # done and saved to the .npy file above.
+            convert_npy_to_tiff(
+                dw_label_path,
+                'label',
+                meta_path,
+                dest_point_path,
+                remap_to_sedi=False,
+                sample_mode=SAMPLE_MODE,
+            )
 
 
     # --- PLOTTING ---

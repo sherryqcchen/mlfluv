@@ -9,7 +9,6 @@ import shutil
 import json
 import numpy as np
 from loguru import logger
-import pandas as pd
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -22,6 +21,10 @@ from UTILS import utils
 from weight_calculator import get_class_weight
 
 SCRIPT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
+def safe_weight_suffix(*parts):
+    raw = "_".join(str(part) for part in parts if part not in (None, ""))
+    return "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in raw)
 
 if __name__ == "__main__":
 
@@ -76,9 +79,6 @@ if __name__ == "__main__":
         exp_folder = os.path.join(SCRIPT_ROOT, exp_folder)
     weight_func = config_params["model"]["weights"]
     loss_func = config_params["model"]['loss_function']
-    configured_class_weights = config_params["model"].get("class_weights")
-
-    weights_path = os.path.join(SCRIPT_ROOT, f"MODEL_LAYER/{weight_func}_weights_{which_label}.csv")
 
     print(f"Train for log {log_num}")
 
@@ -169,16 +169,11 @@ if __name__ == "__main__":
         val_set = Subset(val_set, range(min(int(max_val_samples), len(val_set))))
         print(f"Using first {len(val_set)} validation samples for this run.")
 
-    # Use saved weights for loss function, if the weights are pre-calculated 
-    if configured_class_weights is not None:
-        class_weights = configured_class_weights
-        print("Using class weights from config.")
-    elif os.path.isfile(weights_path):
-        df = pd.read_csv(weights_path)
-        class_weights = df['Weights']
-    else:
-        print('Going to calculate weight now..')
-        class_weights = get_class_weight(train_set, weight_func=weight_func,suffix=which_label)
+    if config_params["model"].get("class_weights") is not None:
+        print("Ignoring model.class_weights; calculating weights from this run's training set.")
+    weight_suffix = safe_weight_suffix(which_label, "initial", log_num, "train", train_fold)
+    print(f"Calculating class weights from this training set with suffix {weight_suffix}.")
+    class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=weight_suffix)
     print(class_weights)
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 

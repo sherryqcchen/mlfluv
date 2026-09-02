@@ -8,7 +8,6 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import copy
 import numpy as np
-import pandas as pd
 
 import torch
 import torch.nn as nn
@@ -29,6 +28,16 @@ from UTILS.plotter import plot_inference_result
 
 SCRIPT_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
+def str_to_bool(value):
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() in ("true", "1", "yes", "y")
+
+
+def safe_weight_suffix(*parts):
+    raw = "_".join(str(part) for part in parts if part not in (None, ""))
+    return "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in raw)
+
 
 if __name__ == "__main__":
 
@@ -40,7 +49,7 @@ if __name__ == "__main__":
     ####################################
     parser = argparse.ArgumentParser(description="Please provide a configuration ymal file for trainning a U-Net model.")
     parser.add_argument('--config_path',type=str, default='script/config.yml', help='Path to a configuration yaml file.' )
-    parser.add_argument('--if_predict',type=bool,default=True, help='True if make prediction using fine-tuned model.')
+    parser.add_argument('--if_predict', type=str_to_bool, default=True, help='True if make prediction using fine-tuned model.')
     args = parser.parse_args()
 
     config_path = args.config_path
@@ -63,14 +72,19 @@ if __name__ == "__main__":
     train_fold = config_params["trainer"]["train_fold"]
     valid_fold = config_params["trainer"]["valid_fold"]
     classes = config_params["trainer"]["classes"] + 1 # 7
+    initial_classes = config_params["trainer"]["classes"]
     device = config_params["trainer"]["device"]
     epochs = config_params["trainer"]["epochs"]
     lr = config_params["trainer"]["learning_rate"]
     loss_func = config_params["model"]['loss_function']
     batch_size = config_params["trainer"]["batch_size"]
     num_workers = config_params["trainer"].get("num_workers", 2)
+    max_train_samples = config_params["trainer"].get("max_train_samples")
+    max_val_samples = config_params["trainer"].get("max_val_samples")
+    eval_interval = config_params["trainer"].get("eval_interval", 5)
+    optimizer_config = config_params["trainer"].get("optimizer", {})
+    scheduler_config = config_params["trainer"].get("scheduler", {})
     weight_func = config_params["model"]["weights"]
-    configured_class_weights = config_params["model"].get("class_weights")
     window_size = config_params["trainer"]["window_size"]
     patch_size = config_params["sample"]["patch_size"]
     with_extra_urban = config_params["incremental_learning"]['with_extra_urban']
@@ -93,8 +107,6 @@ if __name__ == "__main__":
 
     SHOW_PLOTS = False
 
-    weights_path = os.path.join(SCRIPT_ROOT, f"MODEL_LAYER/{weight_func}_weights_{which_label}_incre.csv")
-
     print(f'Fine tune {tune_mode} for log {log_num}')
     print(f"{temperature = }")
     print(f"{distill_lamda = }")
@@ -114,8 +126,8 @@ if __name__ == "__main__":
         encoder_name=ENCODER,
         encoder_weights=ENCODER_WEIGHTS,
         in_channels=in_channels,
-        num_classes=classes,
-        num_valid_classes=6,
+        num_classes=initial_classes,
+        num_valid_classes=initial_classes,
         encoder_freeze=freeze_encoder,
         temperature=temperature,
         decoder_attention_type=model_cfg.get('decoder_attention_type', 'scse'),
@@ -171,20 +183,46 @@ if __name__ == "__main__":
     old_net.load_state_dict(torch.load(checkpoint_path, map_location=device))
     old_net.eval()
     
-    # Create new UNet by copying the old Unet
-    new_net = copy.deepcopy(old_net)
+    # Create the incremental model with one additional output class, then copy
+    # all compatible pretrained weights from the initial model checkpoint.
+    new_net = SMPSegmentationModel(
+        architecture=ARCHITECTURE,
+        encoder_name=ENCODER,
+        encoder_weights=ENCODER_WEIGHTS,
+        in_channels=in_channels,
+        num_classes=classes,
+        num_valid_classes=classes,
+        encoder_freeze=freeze_encoder,
+        temperature=temperature,
+        decoder_attention_type=model_cfg.get('decoder_attention_type', 'scse'),
+        encoder_depth=model_cfg.get('encoder_depth', 5),
+        encoder_output_stride=model_cfg.get('encoder_output_stride', 16),
+        decoder_channels=model_cfg.get('decoder_channels', 256),
+        decoder_atrous_rates=tuple(model_cfg.get('decoder_atrous_rates', (12, 24, 36))),
+        decoder_aspp_separable=model_cfg.get('decoder_aspp_separable', True),
+        decoder_aspp_dropout=model_cfg.get('decoder_aspp_dropout', 0.5),
+        decoder_segmentation_channels=model_cfg.get('decoder_segmentation_channels', 256),
+        upsampling=model_cfg.get('upsampling', 4),
+        aux_params=model_cfg.get('aux_params'),
+    )
+    new_net.load_state_dict(torch.load(checkpoint_path, map_location=device))
     new_net.num_valid_classes = classes
     print(f"{new_net.temperature=}")
 
-    # Use saved weights for loss function, if the weights are pre-calculated 
-    if configured_class_weights is not None:
-        class_weights = configured_class_weights
-        print("Using class weights from config.")
-    elif os.path.isfile(weights_path):
-        df = pd.read_csv(weights_path)
-        class_weights = df['Weights']
-    else:
-        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=f'{which_label}_incre')
+    if max_train_samples is not None:
+        from torch.utils.data import Subset
+        train_set = Subset(train_set, range(min(int(max_train_samples), len(train_set))))
+        print(f"Using first {len(train_set)} training samples for this run.")
+    if max_val_samples is not None:
+        from torch.utils.data import Subset
+        val_set = Subset(val_set, range(min(int(max_val_samples), len(val_set))))
+        print(f"Using first {len(val_set)} validation samples for this run.")
+
+    if config_params["model"].get("class_weights") is not None:
+        print("Ignoring model.class_weights; calculating weights from this run's incremental training set.")
+    weight_suffix = safe_weight_suffix(which_label, "incremental", log_num, tune_mode, "train", train_fold)
+    print(f"Calculating class weights from this incremental training set with suffix {weight_suffix}.")
+    class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=weight_suffix)
     print(class_weights)
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 
@@ -206,7 +244,14 @@ if __name__ == "__main__":
             force_reload=False
         )
 
-    optimiser = optim.Adam(new_net.parameters(), lr=lr)
+    optimizer_name = optimizer_config.get("name", "Adam")
+    weight_decay = optimizer_config.get("weight_decay", 0)
+    if optimizer_name == "Adam":
+        optimiser = optim.Adam(new_net.parameters(), lr=lr, weight_decay=weight_decay)
+    elif optimizer_name == "AdamW":
+        optimiser = optim.AdamW(new_net.parameters(), lr=lr, weight_decay=weight_decay)
+    else:
+        raise ValueError(f"Unsupported optimizer: {optimizer_name}")
 
     interface = MLFluvUnetInterface(
         model=new_net,
@@ -220,10 +265,13 @@ if __name__ == "__main__":
         log_num=log_num,
         mode=tune_mode,
         distill_lamda=distill_lamda,
-        old_model=old_net
+        old_model=old_net,
+        run_config_path=args.config_path,
+        exp_folder=exp_base,
+        scheduler_config=scheduler_config
     )
     
-    interface.train(epochs=epochs, eval_interval=5)
+    interface.train(epochs=epochs, eval_interval=eval_interval)
 
     # Making predictions
     if args.if_predict is True:

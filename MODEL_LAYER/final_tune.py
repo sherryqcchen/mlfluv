@@ -8,7 +8,6 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import copy
 import numpy as np
-import pandas as pd
 
 import torch
 import torch.nn as nn
@@ -26,6 +25,11 @@ from inference import infer_with_patches
 from UTILS import utils
 from UTILS.utils import load_config
 from UTILS.plotter import plot_inference_result
+
+
+def safe_weight_suffix(*parts):
+    raw = "_".join(str(part) for part in parts if part not in (None, ""))
+    return "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in raw)
 
 
 if __name__ == "__main__":
@@ -74,8 +78,6 @@ if __name__ == "__main__":
 
     SHOW_PLOTS = False
 
-    weights_path = os.path.join(root_path, f"script/MODEL_LAYER/{weight_func}_weights_{which_label}_final.csv")
-
     print(f'Final tune for incremental model {tune_mode} from log {log_num}')
     print(f"{temperature = }")
     print(f"{distill_lamda = }")
@@ -117,12 +119,11 @@ if __name__ == "__main__":
         bands = bands      
     )
 
-    # Use saved weights for loss function, if the weights are pre-calculated 
-    if os.path.isfile(weights_path):
-        df = pd.read_csv(weights_path)
-        class_weights = df['Weights']
-    else:
-        class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=f'{which_label}_final')
+    if config_params["model"].get("class_weights") is not None:
+        print("Ignoring model.class_weights; calculating weights from this run's final-tune training set.")
+    weight_suffix = safe_weight_suffix(which_label, "final", log_num, tune_mode, "train", train_fold)
+    print(f"Calculating class weights from this final-tune training set with suffix {weight_suffix}.")
+    class_weights = get_class_weight(train_set, weight_func=weight_func, suffix=weight_suffix)
     print(class_weights)
     weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 
